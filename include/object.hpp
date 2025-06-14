@@ -20,5 +20,5 @@ public:
     virtual void Update(float dt);
     virtual void Draw();
     void ApplyGravity(float dt);
-    void DrawVectors();
+    virtual void DrawVectors();
 } Object;

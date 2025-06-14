@@ -8,11 +8,12 @@ set(CMAKE_DEPENDS_LANGUAGES
 
 # The set of dependency files which are needed:
 set(CMAKE_DEPENDS_DEPENDENCY_FILES
-  "/Users/daniel/Code/physics_edu/src/box.cpp" "CMakeFiles/index.dir/src/box.cpp.o" "gcc" "CMakeFiles/index.dir/src/box.cpp.o.d"
-  "/Users/daniel/Code/physics_edu/src/main.cpp" "CMakeFiles/index.dir/src/main.cpp.o" "gcc" "CMakeFiles/index.dir/src/main.cpp.o.d"
-  "/Users/daniel/Code/physics_edu/src/object.cpp" "CMakeFiles/index.dir/src/object.cpp.o" "gcc" "CMakeFiles/index.dir/src/object.cpp.o.d"
-  "/Users/daniel/Code/physics_edu/src/spring.cpp" "CMakeFiles/index.dir/src/spring.cpp.o" "gcc" "CMakeFiles/index.dir/src/spring.cpp.o.d"
-  "/Users/daniel/Code/physics_edu/src/toolbox.cpp" "CMakeFiles/index.dir/src/toolbox.cpp.o" "gcc" "CMakeFiles/index.dir/src/toolbox.cpp.o.d"
+  "C:/Users/dan/code-projects/physics_edu/src/ball_and_spring.cpp" "CMakeFiles/index.dir/src/ball_and_spring.cpp.obj" "gcc" "CMakeFiles/index.dir/src/ball_and_spring.cpp.obj.d"
+  "C:/Users/dan/code-projects/physics_edu/src/box.cpp" "CMakeFiles/index.dir/src/box.cpp.obj" "gcc" "CMakeFiles/index.dir/src/box.cpp.obj.d"
+  "C:/Users/dan/code-projects/physics_edu/src/main.cpp" "CMakeFiles/index.dir/src/main.cpp.obj" "gcc" "CMakeFiles/index.dir/src/main.cpp.obj.d"
+  "C:/Users/dan/code-projects/physics_edu/src/object.cpp" "CMakeFiles/index.dir/src/object.cpp.obj" "gcc" "CMakeFiles/index.dir/src/object.cpp.obj.d"
+  "C:/Users/dan/code-projects/physics_edu/src/spring.cpp" "CMakeFiles/index.dir/src/spring.cpp.obj" "gcc" "CMakeFiles/index.dir/src/spring.cpp.obj.d"
+  "C:/Users/dan/code-projects/physics_edu/src/toolbox.cpp" "CMakeFiles/index.dir/src/toolbox.cpp.obj" "gcc" "CMakeFiles/index.dir/src/toolbox.cpp.obj.d"
   )
 
 # Targets to which this target links which contain Fortran sources.

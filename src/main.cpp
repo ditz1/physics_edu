@@ -98,11 +98,13 @@ int main(void) {
     }
     int points = 0;
     float box_force = 50.0f;
+
+    BallAndString ball_and_string = BallAndString({ screenWidth / 2.0f, screenHeight / 2.0f }, 200.0f, 0.0f);
     
 
     while (!WindowShouldClose()) {
         
-       
+        ball_and_string.Update(dt);
 
         spring.CheckGrab();
         if (spring.is_grabbed) {
@@ -161,7 +163,18 @@ int main(void) {
         box.CheckCollision();
         spring_path.push_back(spring.position);
 
-        
+        ball_and_string.Update(dt);
+
+        if (IsKeyDown(KEY_UP)) {
+            ball_and_string.angularSpeed += 0.01f;
+        } else if (IsKeyDown(KEY_DOWN)) {
+            ball_and_string.angularSpeed -= 0.01f;
+        }
+
+        if (IsKeyPressed(KEY_SPACE)){
+            ball_and_string.Break();
+        }
+
         BeginDrawing();
             ClearBackground(DARKGRAY);
 
@@ -200,13 +213,13 @@ int main(void) {
             /////////////////
             //// SCENE 1 ////
             /////////////////
-            spring.Draw();
-            spring.DrawVectors();
-            DrawDebugInfo(spring);
-            for (Star s : stars){
-                s.Draw();
-            }
-            DrawText(TextFormat("Points: %d", points), 10, 10, 20, RAYWHITE);
+            // spring.Draw();
+            // spring.DrawVectors();
+            // DrawDebugInfo(spring);
+            // for (Star s : stars){
+            //     s.Draw();
+            // }
+            // DrawText(TextFormat("Points: %d", points), 10, 10, 20, RAYWHITE);
 
             ///////////////
             // SCENE 2 ////
@@ -225,6 +238,15 @@ int main(void) {
             //  DrawText(TextFormat("Box Velocity: (%.2f, %.2f)", box.velocity.x, box.velocity.y), 10, 40, 20, RAYWHITE);
             //  DrawText(TextFormat("Box Friction (mu_f): %.2f", box.mu_kinetic), 10, 70, 20, RAYWHITE);
             // DrawFPS(10, 10);
+
+            ///////////////
+            // SCENE 3////
+            ///////////////
+
+            ball_and_string.Draw();
+            ball_and_string.DrawVectors();
+            DrawText(TextFormat("Angular Speed: %.2f", ball_and_string.angularSpeed), 10, 10, 20, RAYWHITE);
+
         EndDrawing();
 
         if (spring_path.size() > 100){
