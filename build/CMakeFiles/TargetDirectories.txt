@@ -1,0 +1,3 @@
+/Users/daniel/Code/physics_edu/build/CMakeFiles/index.dir
+/Users/daniel/Code/physics_edu/build/CMakeFiles/edit_cache.dir
+/Users/daniel/Code/physics_edu/build/CMakeFiles/rebuild_cache.dir

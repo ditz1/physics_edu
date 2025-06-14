@@ -1,0 +1,1 @@
+g++  -arch arm64 -Wl,-search_paths_first -Wl,-headerpad_max_install_names CMakeFiles/index.dir/src/box.cpp.o CMakeFiles/index.dir/src/main.cpp.o CMakeFiles/index.dir/src/object.cpp.o CMakeFiles/index.dir/src/spring.cpp.o CMakeFiles/index.dir/src/toolbox.cpp.o -o index  /Users/daniel/Code/physics_edu/lib/libraylibmac.a -framework OpenGL -framework Cocoa -framework IOKit
