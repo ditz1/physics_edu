@@ -22,4 +22,5 @@ public:
     void Draw() override;
     void DrawVectors() override;
     void Break();
+    void Reset();
 };

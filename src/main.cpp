@@ -100,11 +100,16 @@ int main(void) {
     float box_force = 50.0f;
 
     BallAndString ball_and_string = BallAndString({ screenWidth / 2.0f, screenHeight / 2.0f }, 200.0f, 0.0f);
+    ball_and_string.path.push_back(ball_and_string.position);
     
 
     while (!WindowShouldClose()) {
         
         ball_and_string.Update(dt);
+        if (Vector2Distance(ball_and_string.path.back(), ball_and_string.position) > 5.0f) {
+            // only add to path if the position has changed significantly
+            ball_and_string.path.push_back(ball_and_string.position);
+        }
 
         spring.CheckGrab();
         if (spring.is_grabbed) {
@@ -173,6 +178,14 @@ int main(void) {
 
         if (IsKeyPressed(KEY_SPACE)){
             ball_and_string.Break();
+        }
+
+        if (IsKeyPressed(KEY_R)) {
+            ball_and_string.Reset();
+        }
+
+        if (ball_and_string.path.size() > 30){
+            ball_and_string.path.erase(ball_and_string.path.begin());
         }
 
         BeginDrawing();
@@ -246,6 +259,9 @@ int main(void) {
             ball_and_string.Draw();
             ball_and_string.DrawVectors();
             DrawText(TextFormat("Angular Speed: %.2f", ball_and_string.angularSpeed), 10, 10, 20, RAYWHITE);
+            for (size_t i = 0; i < ball_and_string.path.size(); i++) {
+                DrawCircleV(ball_and_string.path[i], 2.0f, GREEN);
+            }
 
         EndDrawing();
 

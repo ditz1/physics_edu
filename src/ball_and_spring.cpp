@@ -33,6 +33,15 @@ Vector2 BallAndString::Position() {
     }
 }
 
+void BallAndString::Reset() {
+    is_broken = false;
+    angle = 0.0f; // Reset angle
+    angularSpeed = 0.05f; // Reset angular speed
+    position = Position(); // Reset position
+    velocity = {0, 0}; // Reset velocity
+    acceleration = {0, 0}; // Reset acceleration
+}
+
 void BallAndString::Draw() {
     Vector2 pos = Position();
     DrawLineV(anchor, pos, WHITE);

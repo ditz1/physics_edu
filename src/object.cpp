@@ -8,6 +8,8 @@ void Object::Draw() {
     // meant to be overridden by derived classes
 }
 
+
+
 void Object::ApplyGravity(float dt) {
     acceleration.y += 9.81f; // Gravity
     velocity = Vector2Add(velocity, Vector2Scale(acceleration, dt));

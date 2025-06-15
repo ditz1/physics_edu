@@ -1,6 +1,7 @@
 #pragma once
 #include "raylib/raylib.h"
 #include "raylib/raymath.h"
+#include <vector>
 #define gravity 9.81f
 
 
@@ -10,10 +11,11 @@ public:
     Vector2 velocity{0.0f, 0.0f};
     Vector2 acceleration{0.0f, 0.0f};
     float mass = 1.0f;
-
     bool is_grabbed = false;
     Vector2 grab_offset{0.0f, 0.0f};
     Vector2 grab_position{0.0f, 0.0f};
+
+    std::vector<Vector2> path;
 
     void CheckGrab();
     void Grab(Vector2 mouse_position);
