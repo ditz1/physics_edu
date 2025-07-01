@@ -16,12 +16,18 @@ void Object::ApplyGravity(float dt) {
 }
 
 void Object::DrawVectors() {
-    // normalize vectors so they are same length
-    Vector2 norm_velocity = Vector2Normalize(velocity);
-    Vector2 norm_acceleration = Vector2Normalize(acceleration);
-    // draw arrow from center of object to end of vector
-    DrawLineEx(position, Vector2Add(position, Vector2Scale(norm_velocity, 50.0f)), 3.0f, PURPLE);
-    DrawLineEx(position, Vector2Add(position, Vector2Scale(norm_acceleration, 50.0f)), 3.0f, YELLOW);
+    float velocity_magnitude = Vector2Length(velocity);
+    float acceleration_magnitude = Vector2Length(acceleration);
+    
+    if (velocity_magnitude > 0.01f) { // Small threshold to avoid division by zero
+        Vector2 norm_velocity = Vector2Scale(velocity, 1.0f / velocity_magnitude);
+        DrawLineEx(position, Vector2Add(position, Vector2Scale(norm_velocity, 50.0f)), 3.0f, PURPLE);
+    }
+    
+    if (acceleration_magnitude > 0.01f) {
+        Vector2 norm_acceleration = Vector2Scale(acceleration, 1.0f / acceleration_magnitude);
+        DrawLineEx(position, Vector2Add(position, Vector2Scale(norm_acceleration, 50.0f)), 3.0f, YELLOW);
+    }
 }
 
 void Object::CheckGrab() {

@@ -14,7 +14,7 @@ Box::~Box() {
 
 void Box::Update(float dt) {
     // p1 = p0 + v * dt    
-    if (position.y + size.y < GetScreenHeight()) {
+    if (!is_colliding) {
         ApplyGravity(dt);
     }
     ApplyFriction(dt);
@@ -33,11 +33,12 @@ void Box::CheckCollision() {
     if (position.x < 0.0f || position.x + size.x > s_width) {
         velocity.x *= -0.2f; // reverse x velocity
         position.x = (position.x < 0.0f) ? 0.0f : s_width - size.x; // reset position to screen bounds
-    }
+    } 
+    
     if (position.y < 0.0f || position.y + size.y > s_height) {
         velocity.y *= -0.2f; // reverse y velocity
         position.y = (position.y < 0.0f) ? 0.0f : s_height - size.y; // reset position to screen bounds
-    }
+    } 
 
     // if (velocity.y < 0.1f && velocity.y > -0.1f) {
     //     velocity.y = 0.0f; 
@@ -47,12 +48,22 @@ void Box::CheckCollision() {
     //     velocity.x = 0.0f; 
     //     acceleration.x = 0.0f; 
     // }
+}
 
-
+void Box::CheckPlatformCollision(Rectangle platform_rect) {
+    // Check if the box is colliding with the platform
+    if (CheckCollisionRecs(Rect(), platform_rect)) {
+        // If the box is below the platform, reset its position to the top of the platform
+        is_colliding = true;
+        if (position.y + size.y > platform_rect.y && position.y < platform_rect.y + platform_rect.height) {
+            position.y = platform_rect.y - size.y; // place box on top of the platform
+            velocity.y = 0.0f; // reset vertical velocity
+        }
+    }
 }
 
 void Box::ApplyFriction(float dt) {
-    if (position.y + size.y >= GetScreenHeight()) {
+    if (is_colliding) {
         float normal_force = mass * gravity; 
         // pretty sure this is the normal force
         // since we just expect box to hit the ground,

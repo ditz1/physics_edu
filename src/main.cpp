@@ -101,6 +101,10 @@ int main(void) {
 
     BallAndString ball_and_string = BallAndString({ screenWidth / 2.0f, screenHeight / 2.0f }, 200.0f, 0.0f);
     ball_and_string.path.push_back(ball_and_string.position);
+
+    Vector2 plat_start = { 50.0f, screenHeight - 150.0f };
+    Vector2 plat_size = { (float)GetScreenWidth() - 100.0f, 50.0f };
+    Platform platform = {plat_start, plat_size};
     
 
     while (!WindowShouldClose()) {
@@ -166,6 +170,7 @@ int main(void) {
         spring2.Update(dt);
         box.Update(dt);
         box.CheckCollision();
+        platform.Update(dt);
         spring_path.push_back(spring.position);
 
         ball_and_string.Update(dt);
@@ -191,11 +196,10 @@ int main(void) {
         BeginDrawing();
             ClearBackground(DARKGRAY);
 
-            // ///////////////
-            // // SCENE 0_a ////
-            // ///////////////
+            ///////////////
+            // SCENE 0_a ////
+            ///////////////
             // spring.Draw();
-            // box.Draw();
             // // spring2.Draw();c
             // for (size_t i = 0; i < spring_path.size(); i++) {
             //     DrawCircleV(spring_path[i], 2.0f, GREEN);
@@ -204,9 +208,7 @@ int main(void) {
             //     toolbox.Draw();
             // }
             // DrawDebugInfo(spring);
-            // spring2.anchor = spring.position;   
             // spring.DrawVectors();
-            // box.DrawVectors();
 
             // /////////////
             // SCENE 0_b ////
@@ -235,7 +237,7 @@ int main(void) {
             // DrawText(TextFormat("Points: %d", points), 10, 10, 20, RAYWHITE);
 
             ///////////////
-            // SCENE 2 ////
+            // SCENE 2_a ////
             ///////////////
             // DrawText("get the box to the green square!", 400, 200, 20, RAYWHITE);
             // Rectangle box_rect = { (float)GetScreenWidth() - 200, (float)GetScreenHeight() - 100, 100, 100 };
@@ -253,15 +255,40 @@ int main(void) {
             // DrawFPS(10, 10);
 
             ///////////////
+            // SCENE 2_b ////
+            ///////////////
+            DrawText("get the box to the green square!", 400, 200, 20, RAYWHITE);
+            if (box.is_colliding){
+                box.color = PINK;
+            } else {
+                box.color = RED;
+            }
+            box.CheckPlatformCollision(platform.Rect());
+            Rectangle box_rect = { (float)GetScreenWidth() - 200, (float)GetScreenHeight() - 100, 100, 100 };
+            platform.Draw();
+            DrawRectangleRec(box_rect, GREEN);
+            box.Draw();
+            box.DrawVectors();
+
+            if (CheckCollisionRecs(box_rect, box.Rect())){
+                DrawText("Nice!", box_rect.x - 100, box_rect.y - 100, 20, GREEN);
+            }
+
+             DrawText(TextFormat("Force: %.2f", box_force), 10, 10, 20, RAYWHITE);
+             DrawText(TextFormat("Box Velocity: (%.2f, %.2f)", box.velocity.x, box.velocity.y), 10, 40, 20, RAYWHITE);
+             DrawText(TextFormat("Box Friction (mu_f): %.2f", box.mu_kinetic), 10, 70, 20, RAYWHITE);
+            DrawFPS(10, 10);
+
+            ///////////////
             // SCENE 3////
             ///////////////
 
-            ball_and_string.Draw();
-            ball_and_string.DrawVectors();
-            DrawText(TextFormat("Angular Speed: %.2f", ball_and_string.angularSpeed), 10, 10, 20, RAYWHITE);
-            for (size_t i = 0; i < ball_and_string.path.size(); i++) {
-                DrawCircleV(ball_and_string.path[i], 2.0f, GREEN);
-            }
+            // ball_and_string.Draw();
+            // ball_and_string.DrawVectors();
+            // DrawText(TextFormat("Angular Speed: %.2f", ball_and_string.angularSpeed), 10, 10, 20, RAYWHITE);
+            // for (size_t i = 0; i < ball_and_string.path.size(); i++) {
+            //     DrawCircleV(ball_and_string.path[i], 2.0f, GREEN);
+            // }
 
         EndDrawing();
 
