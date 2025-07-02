@@ -2,9 +2,11 @@
 
 
 void Platform::Draw() {
-    // Draw the platform as a rectangle
-    DrawRectangleV(position, size, GRAY);
-    
-    // Optionally, draw the outline for better visibility
-    DrawRectangleLinesEx((Rectangle){ position.x, position.y, size.x, size.y }, 2.0f, DARKGRAY);
+    // position is now the center, so draw with center origin
+    DrawRectanglePro(
+        (Rectangle){ position.x, position.y, size.x, size.y }, 
+        (Vector2){ size.x * 0.5f, size.y * 0.5f }, // origin at center
+        rotation, 
+        GRAY
+    );
 }

@@ -5,23 +5,21 @@
 // they are collidable, but should never move
 class Platform : public Object {
 public:
-    Platform(Vector2 position, Vector2 size) {
-        this->position = position;
+    Platform(Vector2 position, Vector2 size, float rotation = 0.0f) {
+        this->position = position; // This will be the center
         this->size = size;
-        this->mass = 1.0f; // Default mass
-        this->is_grabbed = false; // Platforms are not grabbed by default
+        this->mass = 1.0f;
+        this->is_grabbed = false;
+        this->rotation = rotation;
     }
     Vector2 size;
+    float rotation = 0.0f;
 
     void Draw() override;
-
-    Rectangle inline Rect() const {
-        return (Rectangle){ position.x, position.y, size.x, size.y };
+    void Update(float dt) override {}
+    
+    // Helper function to get top-left corner if needed
+    Vector2 GetTopLeft() const {
+        return { position.x - size.x * 0.5f, position.y - size.y * 0.5f };
     }
-
-    void Update(float dt) override {
-        // Platforms typically do not move, so no update logic needed
-    }
-
-
 };

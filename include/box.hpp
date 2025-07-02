@@ -1,5 +1,6 @@
 #pragma once
 #include <object.hpp>
+#include "platform.hpp"
 
 class Box : public Object {
 public:
@@ -11,10 +12,12 @@ public:
     Color color = RED;
     float mu_kinetic = 0.5f; // kinetic friction, 0.1 low friction, 1.0 high friction
     bool is_colliding = false; // used to check if the box is colliding with something
+    float rotation = 0.0f;
 
     void Update(float dt) override;
     void Draw() override;
     void CheckCollision();
+    void CheckPlatformCollisionSAT(const Platform& platform);
     void ApplyFriction(float dt);
     Rectangle inline Rect() const {
         return (Rectangle){ position.x, position.y, size.x, size.y };

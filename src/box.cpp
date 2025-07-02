@@ -23,7 +23,19 @@ void Box::Update(float dt) {
 }
 
 void Box::Draw() {
-    DrawRectangleV(position, size, color);
+    // Draw with DrawRectangleV (should work)
+    //DrawRectangleV(position, size, RED);
+    
+    // Draw with DrawRectanglePro - see where it appears
+    DrawRectanglePro(
+        (Rectangle){position.x, position.y, size.x, size.y}, 
+        (Vector2){0, 0}, 
+        rotation, 
+        BLUE  // Different color to see both
+    );
+    
+    // Draw a circle at the position for reference
+    DrawCircleV(position, 5, WHITE);
 }
 
 void Box::CheckCollision() {
@@ -58,6 +70,39 @@ void Box::CheckPlatformCollision(Rectangle platform_rect) {
         if (position.y + size.y > platform_rect.y && position.y < platform_rect.y + platform_rect.height) {
             position.y = platform_rect.y - size.y; // place box on top of the platform
             velocity.y = 0.0f; // reset vertical velocity
+        }
+    }
+}
+
+void Box::CheckPlatformCollisionSAT(const Platform& platform) {
+    RotatedRectangle boxRect = {
+        { position.x + size.x * 0.5f, position.y + size.y * 0.5f },
+        size,
+        0.0f
+    };
+    
+    RotatedRectangle platformRect = {
+        platform.position, // position is already the center
+        platform.size,
+        platform.rotation * DEG2RAD
+    };
+    
+    // Get collision information
+    CollisionInfo collision = CollisionUtils::GetCollisionInfo(boxRect, platformRect);
+    
+    if (collision.hasCollision) {
+        is_colliding = true;
+        rotation = platform.rotation; // Align box rotation with platform
+        
+        // Move box out of collision along the normal by the penetration amount
+        Vector2 correction = Vector2Scale(collision.normal, collision.penetration);
+        position = Vector2Subtract(position, correction);
+        
+        // Adjust velocity - remove component along collision normal
+        float velocityDotNormal = Vector2DotProduct(velocity, collision.normal);
+        if (velocityDotNormal < 0) { // Only if moving into the surface
+            Vector2 velocityAlongNormal = Vector2Scale(collision.normal, velocityDotNormal);
+            velocity = Vector2Subtract(velocity, velocityAlongNormal);
         }
     }
 }

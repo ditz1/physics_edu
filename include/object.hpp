@@ -1,7 +1,5 @@
 #pragma once
-#include "raylib/raylib.h"
-#include "raylib/raymath.h"
-#include <vector>
+#include "collision_utils.hpp"
 #define gravity 9.81f
 
 
