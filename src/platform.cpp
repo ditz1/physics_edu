@@ -7,6 +7,6 @@ void Platform::Draw() {
         (Rectangle){ position.x, position.y, size.x, size.y }, 
         (Vector2){ size.x * 0.5f, size.y * 0.5f }, // origin at center
         rotation, 
-        GRAY
+        BEIGE
     );
 }

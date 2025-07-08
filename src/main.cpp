@@ -103,12 +103,12 @@ int main(void) {
     ball_and_string.path.push_back(ball_and_string.position);
 
     Vector2 plat_start = { 600.0f, screenHeight - 150.0f };
-    Vector2 plat_size = { (float)GetScreenWidth() - 100.0f, 50.0f };
+    Vector2 plat_size = { (float)GetScreenWidth() - 300.0f, 120.0f };
     Platform platform = {plat_start, plat_size};
 
     // Instead of top-left position, provide center position
-    Vector2 plat_center_2 = { 50.0f + 150.0f, screenHeight - 250.0f }; // center of platform
-    Vector2 plat_size_2 = { 350.0f, 50.0f };
+    Vector2 plat_center_2 = { 175.0f, screenHeight - 170.0f }; // center of platform
+    Vector2 plat_size_2 = { 350.0f, 125.0f };
     float plat_rotation = 30.0f; // degrees
     Platform platform2 = {plat_center_2, plat_size_2, plat_rotation};
     
@@ -174,7 +174,10 @@ int main(void) {
 
         spring.Update(dt);
         spring2.Update(dt);
+        
         box.Update(dt);
+        box.was_colliding_last_frame = box.is_colliding; // store collision state for next frame
+        box.last_platform_id = box.current_platform_id; // store last platform ID for next frame
         box.CheckCollision();
         platform.Update(dt);
         spring_path.push_back(spring.position);
@@ -264,45 +267,17 @@ int main(void) {
             // SCENE 2_b ////
             ///////////////
 
-            // Debug visualization - add this in your drawing section
-            if (true) { // Set to true to enable debug drawing
-                // Draw platform2 corners
-                RotatedRectangle platformRect = {
-                    { platform2.position.x + platform2.size.x * 0.5f, platform2.position.y + platform2.size.y * 0.5f },
-                    platform2.size,
-                    platform2.rotation * DEG2RAD
-                };
-
-                auto corners = CollisionUtils::GetRectangleCorners(platformRect);
-                for (size_t i = 0; i < corners.size(); i++) {
-                    DrawCircleV(corners[i], 5, YELLOW);
-                    DrawLineV(corners[i], corners[(i + 1) % corners.size()], YELLOW);
-                }
-
-                // Draw box corners
-                RotatedRectangle boxRect = {
-                    { box.position.x + box.size.x * 0.5f, box.position.y + box.size.y * 0.5f },
-                    box.size,
-                    0.0f
-                };
-
-                auto boxCorners = CollisionUtils::GetRectangleCorners(boxRect);
-                for (size_t i = 0; i < boxCorners.size(); i++) {
-                    DrawCircleV(boxCorners[i], 3, RED);
-                }
-
-                // Draw centers
-                DrawCircleV(platformRect.center, 8, BLUE);
-                DrawCircleV(boxRect.center, 8, GREEN);
-            }
+            
 
             DrawText("get the box to the green square!", 400, 200, 20, RAYWHITE);
             bool wasColliding = box.is_colliding;
             box.is_colliding = false; // Reset collision state
 
             // Check collisions with both platforms
-            box.CheckPlatformCollisionSAT(platform);
-            box.CheckPlatformCollisionSAT(platform2);
+            box.CheckPlatformCollisionSAT(platform, 1);  // Platform ID 1 (higher priority)
+            if (!box.is_colliding) {
+                box.CheckPlatformCollisionSAT(platform2, 0);   // Platform ID 0 (lower priority)
+            }
 
             // Set color based on collision state
             if (box.is_colliding){
@@ -310,7 +285,7 @@ int main(void) {
             } else {
                 box.color = RED;
             }
-            Rectangle box_rect = { (float)GetScreenWidth() - 200, (float)GetScreenHeight() - 100, 100, 100 };
+            Rectangle box_rect = { 525, 450, 100, 100 };
             platform.Draw();
             platform2.Draw();
             DrawRectangleRec(box_rect, GREEN);
