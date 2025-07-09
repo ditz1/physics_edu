@@ -84,7 +84,7 @@ int main(void) {
 
     Box box = Box(50, 50);
     box.position = { 75.0f, screenHeight / 2.0f - 200.0f };
-    box.mass = 2.0f;
+    box.mass = 100.0f;
 
 
     Toolbox toolbox;
@@ -102,13 +102,12 @@ int main(void) {
     BallAndString ball_and_string = BallAndString({ screenWidth / 2.0f, screenHeight / 2.0f }, 200.0f, 0.0f);
     ball_and_string.path.push_back(ball_and_string.position);
 
-    Vector2 plat_start = { 600.0f, screenHeight - 150.0f };
-    Vector2 plat_size = { (float)GetScreenWidth() - 300.0f, 120.0f };
+    Vector2 plat_start = { screenWidth/2, screenHeight };
+    Vector2 plat_size = { screenWidth, 320.0f };
     Platform platform = {plat_start, plat_size};
 
-    // Instead of top-left position, provide center position
-    Vector2 plat_center_2 = { 175.0f, screenHeight - 170.0f }; // center of platform
-    Vector2 plat_size_2 = { 350.0f, 125.0f };
+    Vector2 plat_center_2 = { 375.0f, screenHeight - 50.0f }; // center of platform
+    Vector2 plat_size_2 = { 1050.0f, 325.0f };
     float plat_rotation = 30.0f; // degrees
     Platform platform2 = {plat_center_2, plat_size_2, plat_rotation};
     
@@ -285,7 +284,7 @@ int main(void) {
             } else {
                 box.color = RED;
             }
-            Rectangle box_rect = { 525, 450, 100, 100 };
+            Rectangle box_rect = { screenWidth - 200, 480, 100, 100 };
             platform.Draw();
             platform2.Draw();
             DrawRectangleRec(box_rect, GREEN);

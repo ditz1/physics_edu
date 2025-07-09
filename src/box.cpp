@@ -14,7 +14,13 @@ Box::~Box() {
 }
 
 void Box::Update(float dt) {
-    // p1 = p0 + v * dt    
+    // p1 = p0 + v * dt
+    // if box was not colliding last frame but it is colliding this frame, we need to reset the velocity
+
+    if (!was_colliding_last_frame && is_colliding) {
+        velocity.y = 9.81f;
+    }
+
     if (!is_colliding) {
         ApplyGravity(dt);
     } else {
@@ -44,6 +50,7 @@ void Box::Draw() {
         rotation, 
         BLUE  // Different color to see both
     );
+    
     
     // Draw a circle at the position for reference
     DrawCircleV(position, 5, WHITE);
@@ -80,7 +87,7 @@ void Box::CheckPlatformCollision(Rectangle platform_rect) {
         is_colliding = true;
         if (position.y + size.y > platform_rect.y && position.y < platform_rect.y + platform_rect.height) {
             position.y = platform_rect.y - size.y; // place box on top of the platform
-            velocity.y = 0.0f; // reset vertical velocity
+            //velocity.y = 0.0f; // reset vertical velocity
         }
     }
 }
@@ -133,7 +140,7 @@ void Box::CheckPlatformCollisionSAT(const Platform& platform, int platform_id) {
                 // again, issue here is that this is just completely arbitrary. i dont know if the conservation would be 10%,
                 // or anywhere close for that matter, but otherwise the box wont move at all after transition
                 std::cout << "transitioning to flatter surface" << std::endl;
-                velocity = Vector2Scale(new_slope_direction, old_speed * 0.15f); // 20%
+                velocity = Vector2Scale(new_slope_direction, old_speed * 1.0f); // 20%
             } else {
                 // Normal velocity projection for other transitions
                 velocity = Vector2Scale(new_slope_direction, velocity_along_new_slope);

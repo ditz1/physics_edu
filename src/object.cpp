@@ -13,6 +13,10 @@ void Object::Draw() {
 void Object::ApplyGravity(float dt) {
     acceleration.y += 9.81f; // Gravity
     velocity = Vector2Add(velocity, Vector2Scale(acceleration, dt));
+    float terminal_velocity = 500.0f; // Arbitrary terminal velocity limit
+    if (velocity.y > terminal_velocity) {
+        velocity.y = terminal_velocity; // Cap the velocity to terminal velocity
+    }
 }
 
 void Object::DrawVectors() {
