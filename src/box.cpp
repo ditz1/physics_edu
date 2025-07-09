@@ -18,7 +18,8 @@ void Box::Update(float dt) {
     // if box was not colliding last frame but it is colliding this frame, we need to reset the velocity
 
     if (!was_colliding_last_frame && is_colliding) {
-        velocity.y = 9.81f;
+        //velocity = {0.0f, 0.0f};
+        acceleration.y = 9.81f;
     }
 
     if (!is_colliding) {

@@ -108,7 +108,7 @@ int main(void) {
 
     Vector2 plat_center_2 = { 375.0f, screenHeight - 50.0f }; // center of platform
     Vector2 plat_size_2 = { 1050.0f, 325.0f };
-    float plat_rotation = 30.0f; // degrees
+    float plat_rotation = 40.0f; // degrees
     Platform platform2 = {plat_center_2, plat_size_2, plat_rotation};
     
 
