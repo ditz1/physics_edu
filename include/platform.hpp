@@ -14,6 +14,7 @@ public:
     }
     Vector2 size;
     float rotation = 0.0f;
+    bool is_selected = false;
 
     void Draw() override;
     void Update(float dt) override {}

@@ -3,6 +3,7 @@
 #include "box.hpp"
 #include "ball_and_string.hpp"
 #include "platform.hpp"
+extern std::vector<Platform> all_platforms;
 
 class Toolbox {
 public:

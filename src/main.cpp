@@ -114,6 +114,7 @@ int main(void) {
     Vector2 plat_size_2 = { 1050.0f, 325.0f };
     float plat_rotation = 40.0f; // degrees
     Platform platform2 = {plat_center_2, plat_size_2, plat_rotation};
+    all_platforms.reserve(10);
     all_platforms.push_back(platform);
     all_platforms.push_back(platform2);
 
@@ -127,35 +128,40 @@ int main(void) {
 
         
 
-            spring.CheckGrab();
-            if (spring.is_grabbed) {
-                Vector2 mouse_position = GetMousePosition();
-                spring.Grab(mouse_position);
-            }
+        spring.CheckGrab();
+        if (spring.is_grabbed) {
+            Vector2 mouse_position = GetMousePosition();
+            spring.Grab(mouse_position);
+        }
+        box.CheckGrab();
+        if (box.is_grabbed) {
+            Vector2 mouse_position = GetMousePosition();
+            box.Grab(mouse_position);
+        }
+        spring2.CheckGrab();
+        if (spring2.is_grabbed) {
+            Vector2 mouse_position = GetMousePosition();
+            spring2.Grab(mouse_position);
+        }
 
-            box.CheckGrab();
-            if (box.is_grabbed) {
-                Vector2 mouse_position = GetMousePosition();
-                box.Grab(mouse_position);
-            }
 
-            spring2.CheckGrab();
-            if (spring2.is_grabbed) {
+        for (Platform& platform : all_platforms) {
+            platform.CheckGrab();
+            if (platform.is_grabbed) {
+                platform.is_selected = true; // mark platform as selected
                 Vector2 mouse_position = GetMousePosition();
-                spring2.Grab(mouse_position);
+                platform.Grab(mouse_position);
+            } else {
+                platform.is_selected = false; // mark platform as not selected
             }
-            for (auto platform : all_platforms) {
-                platform.CheckGrab();
-                if (platform.is_grabbed) {
-                    Vector2 mouse_position = GetMousePosition();
-                    platform.Grab(mouse_position);
-                }
+            if (platform.is_selected) {
                 if (IsKeyDown(KEY_Z)){
                     platform.rotation += 1.0f; // rotate platform clockwise
                 } else if (IsKeyDown(KEY_C)) {
                     platform.rotation -= 1.0f; // rotate platform counter-clockwise
                 }
             }
+        }
 
             // platform.CheckGrab();
             // if (platform.is_grabbed) {
@@ -343,10 +349,10 @@ int main(void) {
             DrawText("get the box to the green square!", 400, 200, 20, RAYWHITE);
 
             // Check collisions with both platforms
-            box.CheckPlatformCollisionSAT(platform, 1);  // Platform ID 1 (higher priority)
-            if (!box.is_colliding) {
-                box.CheckPlatformCollisionSAT(platform2, 0);   // Platform ID 0 (lower priority)
-            }
+            // box.CheckPlatformCollisionSAT(platform, 1);  // Platform ID 1 (higher priority)
+            // if (!box.is_colliding) {
+            //     box.CheckPlatformCollisionSAT(platform2, 0);   // Platform ID 0 (lower priority)
+            // }
 
             // Set color based on collision state
             if (box.is_colliding){
@@ -355,8 +361,11 @@ int main(void) {
                 box.color = RED;
             }
             Rectangle box_rect = { screenWidth - 200, 480, 100, 100 };
-            platform.Draw();
-            platform2.Draw();
+            // platform.Draw();
+            // platform2.Draw();
+            for (Platform& plat : all_platforms) {
+                plat.Draw();
+            }
             DrawRectangleRec(box_rect, GREEN);
             box.Draw();
             box.DrawVectors();
