@@ -47,7 +47,7 @@ void Box::Draw() {
     // Draw with DrawRectanglePro - see where it appears
     DrawRectanglePro(
         (Rectangle){position.x, position.y, size.x, size.y}, 
-        (Vector2){0, 0}, 
+        (Vector2){ size.x * 0.5f, size.y * 0.5f }, 
         rotation, 
         BLUE  // Different color to see both
     );
@@ -61,12 +61,12 @@ void Box::CheckCollision() {
     int s_width = GetScreenWidth();
     int s_height = GetScreenHeight();
 
-    if (position.x < 0.0f || position.x + size.x > s_width) {
+    if (position.x < 0.0f || position.x + (size.x * 0.5f) > s_width) {
         velocity.x *= -0.2f; // reverse x velocity
         position.x = (position.x < 0.0f) ? 0.0f : s_width - size.x; // reset position to screen bounds
     } 
     
-    if (position.y < 0.0f || position.y + size.y > s_height) {
+    if (position.y < 0.0f || position.y + (size.y * 0.5f) > s_height) {
         velocity.y *= -0.2f; // reverse y velocity
         position.y = (position.y < 0.0f) ? 0.0f : s_height - size.y; // reset position to screen bounds
     } 
@@ -87,7 +87,7 @@ void Box::CheckPlatformCollision(Rectangle platform_rect) {
         // If the box is below the platform, reset its position to the top of the platform
         is_colliding = true;
         if (position.y + size.y > platform_rect.y && position.y < platform_rect.y + platform_rect.height) {
-            position.y = platform_rect.y - size.y; // place box on top of the platform
+            position.y = platform_rect.y - (size.y * 0.5); // place box on top of the platform
             //velocity.y = 0.0f; // reset vertical velocity
         }
     }
@@ -95,7 +95,7 @@ void Box::CheckPlatformCollision(Rectangle platform_rect) {
 
 void Box::CheckPlatformCollisionSAT(const Platform& platform, int platform_id) {
     RotatedRectangle boxRect = {
-        { position.x + size.x * 0.5f, position.y + size.y * 0.5f },
+        { position.x , position.y },
         size,
         0.0f
     };

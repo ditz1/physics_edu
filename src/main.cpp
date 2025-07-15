@@ -1,6 +1,8 @@
 #include "../include/raylib/raylib.h"
 #include "../include/toolbox.hpp"
 
+bool edit_mode = false;
+
 
 typedef class Star {
 public:
@@ -138,6 +140,27 @@ int main(void) {
             spring2.Grab(mouse_position);
         }
 
+        platform.CheckGrab();
+        if (platform.is_grabbed) {
+            Vector2 mouse_position = GetMousePosition();
+            platform.Grab(mouse_position);
+            if (IsKeyDown(KEY_Z)){
+                platform.rotation += 1.0f; // rotate platform clockwise
+            } else if (IsKeyDown(KEY_C)) {
+                platform.rotation -= 1.0f; // rotate platform counter-clockwise
+            }
+        }
+        platform2.CheckGrab();
+        if (platform2.is_grabbed) {
+            Vector2 mouse_position = GetMousePosition();
+            platform2.Grab(mouse_position);
+            if (IsKeyDown(KEY_Z)){
+                platform2.rotation += 1.0f; // rotate platform clockwise
+            } else if (IsKeyDown(KEY_C)) {
+                platform2.rotation -= 1.0f; // rotate platform counter-clockwise
+            }
+        }
+
         points = 0;
         for (Star& s : stars){
             s.CheckCollision(spring);
@@ -168,20 +191,29 @@ int main(void) {
         } else if (IsKeyPressed(KEY_COMMA)){
             box.mu_kinetic -= 0.1f;
         }
-        
-        spring2.anchor = spring.position;   
 
-        spring.Update(dt);
-        spring2.Update(dt);
-        
-        box.Update(dt);
-        box.was_colliding_last_frame = box.is_colliding; // store collision state for next frame
-        box.last_platform_id = box.current_platform_id; // store last platform ID for next frame
-        box.CheckCollision();
-        platform.Update(dt);
-        spring_path.push_back(spring.position);
+        if (IsKeyPressed(KEY_E)){
+            edit_mode = !edit_mode;
+        }
 
-        ball_and_string.Update(dt);
+        //////////////////
+        // UPDATE LOGIC //
+        //////////////////
+        if (!edit_mode) {
+            spring2.anchor = spring.position;   
+
+            spring.Update(dt);
+            spring2.Update(dt);
+
+            box.Update(dt);
+            box.was_colliding_last_frame = box.is_colliding; // store collision state for next frame
+            box.last_platform_id = box.current_platform_id; // store last platform ID for next frame
+            box.CheckCollision();
+            platform.Update(dt);
+            spring_path.push_back(spring.position);
+
+            ball_and_string.Update(dt);
+        }
 
         if (IsKeyDown(KEY_UP)) {
             ball_and_string.angularSpeed += 0.01f;
@@ -203,6 +235,7 @@ int main(void) {
 
         BeginDrawing();
             ClearBackground(DARKGRAY);
+            
 
             ///////////////
             // SCENE 0_a ////
@@ -310,6 +343,10 @@ int main(void) {
             // for (size_t i = 0; i < ball_and_string.path.size(); i++) {
             //     DrawCircleV(ball_and_string.path[i], 2.0f, GREEN);
             // }
+
+            if (edit_mode) {
+                DrawText("EDIT MODE", screenWidth - 140, screenHeight - 40, 20, RED);
+            }
 
         EndDrawing();
 

@@ -2,6 +2,8 @@
 #include "collision_utils.hpp"
 #define gravity 9.81f
 
+extern bool edit_mode;
+
 
 typedef class Object {
 public:
