@@ -4,11 +4,16 @@
 #include "ball_and_string.hpp"
 #include "platform.hpp"
 
-
 class Toolbox {
 public:
     void Draw();
-
-    std::vector<Object*> objects; // Collection of objects to manage
-
+    void Update(float dt, std::vector<Platform>& platforms); // Add platforms parameter
+    
+    std::vector<Object*> objects;
+    
+    // Platform creation state
+    bool creating_platform = false;
+    Vector2 platform_start_pos;
+    Vector2 platform_current_pos;
+    bool mouse_pressed = false;
 };

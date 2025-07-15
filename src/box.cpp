@@ -43,13 +43,21 @@ void Box::Update(float dt) {
 void Box::Draw() {
     // Draw with DrawRectangleV (should work)
     //DrawRectangleV(position, size, RED);
-    
+    float border = 2.0f;
     // Draw with DrawRectanglePro - see where it appears
+    
     DrawRectanglePro(
-        (Rectangle){position.x, position.y, size.x, size.y}, 
-        (Vector2){ size.x * 0.5f, size.y * 0.5f }, 
+        (Rectangle){ position.x, position.y, size.x, size.y }, 
+        (Vector2){ size.x * 0.5f, size.y * 0.5f }, // origin at center
         rotation, 
-        BLUE  // Different color to see both
+        BLACK
+    );
+    
+    DrawRectanglePro(
+        (Rectangle){ position.x, position.y, size.x - border * 2, size.y - border * 2 }, 
+        (Vector2){ (size.x - border * 2) * 0.5f, (size.y - border * 2) * 0.5f }, // origin at center of smaller rect
+        rotation, 
+        BLUE
     );
     
     

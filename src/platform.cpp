@@ -73,10 +73,16 @@ void Platform::Draw() {
             mark_pos.y + perp_dir.y * -mark_length
         };
         
-        DrawLineEx(mark_pos, mark_end, 2.0f, DARKGRAY);
+       
+        //void DrawTextPro(Font font, const char *text, Vector2 position, Vector2 origin, float rotation, float fontSize, float spacing, Color tint)
+        if (i > 0){
+            DrawLineEx(mark_pos, mark_end, 2.0f, GRAY);
+            DrawTextPro(GetFontDefault(), TextFormat("%d", i), (Vector2) {mark_pos.x - 10, mark_pos.y + 10}, (Vector2){ 0, 0 }, rotation, 10.0f, 1.0f, BLACK);
+        }
     }
     
     if (edit_mode){
         DrawCircleV(position, 20.0f, RED);
+        DrawText(TextFormat("%.2f deg", rotation), position.x + 25, position.y - 10, 20, BLACK);
     }
 }

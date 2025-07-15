@@ -2,6 +2,8 @@
 #include "../include/toolbox.hpp"
 
 bool edit_mode = false;
+std::vector<Platform> all_platforms;
+
 
 
 typedef class Star {
@@ -112,7 +114,8 @@ int main(void) {
     Vector2 plat_size_2 = { 1050.0f, 325.0f };
     float plat_rotation = 40.0f; // degrees
     Platform platform2 = {plat_center_2, plat_size_2, plat_rotation};
-    
+    all_platforms.push_back(platform);
+    all_platforms.push_back(platform2);
 
     while (!WindowShouldClose()) {
         
@@ -122,44 +125,59 @@ int main(void) {
             ball_and_string.path.push_back(ball_and_string.position);
         }
 
-        spring.CheckGrab();
-        if (spring.is_grabbed) {
-            Vector2 mouse_position = GetMousePosition();
-            spring.Grab(mouse_position);
-        }
+        
 
-        box.CheckGrab();
-        if (box.is_grabbed) {
-            Vector2 mouse_position = GetMousePosition();
-            box.Grab(mouse_position);
-        }
-
-        spring2.CheckGrab();
-        if (spring2.is_grabbed) {
-            Vector2 mouse_position = GetMousePosition();
-            spring2.Grab(mouse_position);
-        }
-
-        platform.CheckGrab();
-        if (platform.is_grabbed) {
-            Vector2 mouse_position = GetMousePosition();
-            platform.Grab(mouse_position);
-            if (IsKeyDown(KEY_Z)){
-                platform.rotation += 1.0f; // rotate platform clockwise
-            } else if (IsKeyDown(KEY_C)) {
-                platform.rotation -= 1.0f; // rotate platform counter-clockwise
+            spring.CheckGrab();
+            if (spring.is_grabbed) {
+                Vector2 mouse_position = GetMousePosition();
+                spring.Grab(mouse_position);
             }
-        }
-        platform2.CheckGrab();
-        if (platform2.is_grabbed) {
-            Vector2 mouse_position = GetMousePosition();
-            platform2.Grab(mouse_position);
-            if (IsKeyDown(KEY_Z)){
-                platform2.rotation += 1.0f; // rotate platform clockwise
-            } else if (IsKeyDown(KEY_C)) {
-                platform2.rotation -= 1.0f; // rotate platform counter-clockwise
+
+            box.CheckGrab();
+            if (box.is_grabbed) {
+                Vector2 mouse_position = GetMousePosition();
+                box.Grab(mouse_position);
             }
-        }
+
+            spring2.CheckGrab();
+            if (spring2.is_grabbed) {
+                Vector2 mouse_position = GetMousePosition();
+                spring2.Grab(mouse_position);
+            }
+            for (auto platform : all_platforms) {
+                platform.CheckGrab();
+                if (platform.is_grabbed) {
+                    Vector2 mouse_position = GetMousePosition();
+                    platform.Grab(mouse_position);
+                }
+                if (IsKeyDown(KEY_Z)){
+                    platform.rotation += 1.0f; // rotate platform clockwise
+                } else if (IsKeyDown(KEY_C)) {
+                    platform.rotation -= 1.0f; // rotate platform counter-clockwise
+                }
+            }
+
+            // platform.CheckGrab();
+            // if (platform.is_grabbed) {
+            //     Vector2 mouse_position = GetMousePosition();
+            //     platform.Grab(mouse_position);
+            //     if (IsKeyDown(KEY_Z)){
+            //         platform.rotation += 1.0f; // rotate platform clockwise
+            //     } else if (IsKeyDown(KEY_C)) {
+            //         platform.rotation -= 1.0f; // rotate platform counter-clockwise
+            //     }
+            // }
+            // platform2.CheckGrab();
+            // if (platform2.is_grabbed) {
+            //     Vector2 mouse_position = GetMousePosition();
+            //     platform2.Grab(mouse_position);
+            //     if (IsKeyDown(KEY_Z)){
+            //         platform2.rotation += 1.0f; // rotate platform clockwise
+            //     } else if (IsKeyDown(KEY_C)) {
+            //         platform2.rotation -= 1.0f; // rotate platform counter-clockwise
+            //     }
+            // }
+        
 
         points = 0;
         for (Star& s : stars){
@@ -170,11 +188,10 @@ int main(void) {
         }
 
 
-        if (IsKeyDown(KEY_TAB)){
-            toolbox_active = true;
-        } else {
-            toolbox_active = false;
+        if (IsKeyPressed(KEY_TAB)){
+            toolbox_active = !toolbox_active;
         }
+        
 
         if (IsKeyPressed(KEY_LEFT)){
             box_force -= 1.0f;
@@ -215,6 +232,25 @@ int main(void) {
             ball_and_string.Update(dt);
         }
 
+      
+
+        if (toolbox_active) {
+            toolbox.Update(dt, all_platforms);
+        }
+
+        for (auto& plat : all_platforms) {
+            plat.Draw();
+        }
+
+        bool wasColliding = box.is_colliding;
+        box.is_colliding = false;
+
+        for (size_t i = 0; i < all_platforms.size(); i++) {
+            if (!box.is_colliding) {
+                box.CheckPlatformCollisionSAT(all_platforms[i], i);
+            }
+        }
+
         if (IsKeyDown(KEY_UP)) {
             ball_and_string.angularSpeed += 0.01f;
         } else if (IsKeyDown(KEY_DOWN)) {
@@ -235,6 +271,9 @@ int main(void) {
 
         BeginDrawing();
             ClearBackground(DARKGRAY);
+            if (toolbox_active) {
+                toolbox.Draw();
+            }
             
 
             ///////////////
@@ -302,8 +341,6 @@ int main(void) {
             
 
             DrawText("get the box to the green square!", 400, 200, 20, RAYWHITE);
-            bool wasColliding = box.is_colliding;
-            box.is_colliding = false; // Reset collision state
 
             // Check collisions with both platforms
             box.CheckPlatformCollisionSAT(platform, 1);  // Platform ID 1 (higher priority)
@@ -347,7 +384,10 @@ int main(void) {
             if (edit_mode) {
                 DrawText("EDIT MODE", screenWidth - 140, screenHeight - 40, 20, RED);
             }
-
+            DrawText(TextFormat("Num Platforms: %d", all_platforms.size()), 50, 10, 20, RAYWHITE);
+            if (toolbox.creating_platform) {
+                DrawText("Creating Platform", 50, 40, 20, RAYWHITE);
+            }
         EndDrawing();
 
         if (spring_path.size() > 100){
