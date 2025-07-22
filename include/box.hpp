@@ -17,11 +17,26 @@ public:
     int current_platform_id = -1;
     int last_platform_id = -1;
 
+    Vector2 prediction_start_position;
+    bool has_prediction_start = false;
+    bool ghost_calculated = false;
+    Vector2 ghost_position_stored;
+    Vector2 transition_point_stored;
+
     void Update(float dt) override;
     void Draw() override;
     void CheckCollision();
     void CheckPlatformCollisionSAT(const Platform& platform, int platform_id);    
     void ApplyFriction(float dt);
+    void SetPredictionStartPosition();
+
+    // Add these method declarations to your Box class
+    float CalculateStoppingDistanceFromSlope(const Platform& slope_platform, float slope_travel_distance);
+    float GetSlopeDistance(const Platform& platform);
+    Vector2 CalculateStoppingPosition(const Platform& slope_platform, const Platform& horizontal_platform);
+    void DrawGhost(const Platform& slope_platform, const Platform& horizontal_platform);
+
+
     Rectangle inline Rect() const {
         return (Rectangle){ position.x, position.y, size.x, size.y };
     }

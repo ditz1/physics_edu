@@ -29,11 +29,13 @@ void Platform::Draw() {
         local_top_left.x * cos_rot - local_top_left.y * sin_rot + position.x,
         local_top_left.x * sin_rot + local_top_left.y * cos_rot + position.y
     };
+    top_left = rotated_top_left; // Store for later use
     
     Vector2 rotated_top_right = {
         local_top_right.x * cos_rot - local_top_right.y * sin_rot + position.x,
         local_top_right.x * sin_rot + local_top_right.y * cos_rot + position.y
     };
+    top_right = rotated_top_right; // Store for later use
     
     // Draw measurement line across the rotated top edge
     DrawLineEx(rotated_top_left, rotated_top_right, 2.0f, DARKGRAY);

@@ -133,11 +133,21 @@ int main(void) {
             Vector2 mouse_position = GetMousePosition();
             spring.Grab(mouse_position);
         }
+
+
+        bool was_grabbed_last_frame = box.is_grabbed;
         box.CheckGrab();
         if (box.is_grabbed) {
             Vector2 mouse_position = GetMousePosition();
             box.Grab(mouse_position);
+            box.ghost_calculated = false; // reset ghost calculation when grabbed
         }
+
+        // Check if box was just released
+        if (was_grabbed_last_frame && !box.is_grabbed) {
+            box.SetPredictionStartPosition();
+        }
+
         spring2.CheckGrab();
         if (spring2.is_grabbed) {
             Vector2 mouse_position = GetMousePosition();
@@ -355,11 +365,30 @@ int main(void) {
             // }
 
             // Set color based on collision state
-            if (box.is_colliding){
+            if (wasColliding){
                 box.color = PINK;
             } else {
                 box.color = RED;
             }
+
+            if (wasColliding){
+                Platform* slope_platform = nullptr;
+                Platform* horizontal_platform = nullptr;
+
+                // Example logic (you'll need to adapt this to your specific setup):
+                for (auto& platform : all_platforms) {
+                    if (abs(platform.rotation) > 5.0f) { // Sloped platform
+                        slope_platform = &platform;
+                    } else { // Horizontal platform  
+                        horizontal_platform = &platform;
+                    }
+                }
+
+                if (slope_platform && horizontal_platform) {
+                    box.DrawGhost(*slope_platform, *horizontal_platform);
+                }
+            }
+
             Rectangle box_rect = { screenWidth - 200, 480, 100, 100 };
             // platform.Draw();
             // platform2.Draw();

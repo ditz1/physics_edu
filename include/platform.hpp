@@ -15,9 +15,13 @@ public:
     Vector2 size;
     float rotation = 0.0f;
     bool is_selected = false;
+    Vector2 top_left; // after rotated
+    Vector2 top_right; // after rotated
 
     void Draw() override;
     void Update(float dt) override {}
+
+    
     
     // Helper function to get top-left corner if needed
     Vector2 GetTopLeft() const {
