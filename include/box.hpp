@@ -22,6 +22,7 @@ public:
     bool ghost_calculated = false;
     Vector2 ghost_position_stored;
     Vector2 transition_point_stored;
+    float distance_traveled = 0.0f;
 
     void Update(float dt) override;
     void Draw() override;

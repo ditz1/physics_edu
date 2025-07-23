@@ -102,7 +102,7 @@ CollisionInfo CollisionUtils::GetCollisionInfo(const RotatedRectangle& rect1, co
         
         // Check for separation
         if (max1 < min2 || max2 < min1) {
-            return info; // No collision
+            return info; 
         }
         
         float overlap = std::min(max1, max2) - std::max(min1, min2);

@@ -205,13 +205,16 @@ void Box::ApplyFriction(float dt) {
 
 
 float Box::CalculateStoppingDistanceFromSlope(const Platform& slope_platform, float slope_travel_distance) {
+    //
+    // on slope
+    //
+    
     float slope_angle = slope_platform.rotation * DEG2RAD;
     
-    // PHASE 1: Motion down the slope
     // V_initial = 0 (starts from rest)
     float V_initial_slope = 0.0f;
     
-    // Net acceleration down the slope
+    // acceleration down the slope
     float gravity_component = gravity * sin(fabs(slope_angle));
     float friction_component_slope = mu_kinetic * gravity * cos(fabs(slope_angle));
     float a_slope = gravity_component - friction_component_slope;
@@ -220,12 +223,15 @@ float Box::CalculateStoppingDistanceFromSlope(const Platform& slope_platform, fl
         return 0.0f; // Won't slide down slope
     }
     
-    // V_final² = V_initial² + 2*a*d
-    // V_final² = 0² + 2 * a_slope * slope_travel_distance
+    // V_final^2 = V_initial^2 + 2*a*d
+    // V_final^2 = 0^2 + 2 * a_slope * slope_travel_distance
     float V_final_slope_squared = 2.0f * a_slope * slope_travel_distance;
     float V_final_slope = sqrt(V_final_slope_squared);
-    
-    // PHASE 2: Motion on horizontal platform
+
+    //
+    // horizontal platform
+    //
+
     // V_initial = V_final_slope (velocity gained from slope)
     float V_initial_horizontal = V_final_slope;
     
@@ -235,9 +241,9 @@ float Box::CalculateStoppingDistanceFromSlope(const Platform& slope_platform, fl
     // Deceleration due to friction on horizontal surface
     float a_horizontal = -mu_kinetic * gravity;
     
-    // V_final² = V_initial² + 2*a*d
-    // 0² = V_initial_horizontal² + 2*a_horizontal*d
-    // d = -V_initial_horizontal² / (2*a_horizontal)
+    // V_final^2 = V_initial^2 + 2*a*d
+    // 0^2 = V_initial_horizontal^2 + 2*a_horizontal*d
+    // d = -V_initial_horizontal^2 / (2*a_horizontal)
     float stopping_distance = -(V_initial_horizontal * V_initial_horizontal) / (2.0f * a_horizontal);
     
     return stopping_distance;
@@ -266,7 +272,7 @@ void Box::SetPredictionStartPosition() {
     float sin_rot = sinf(box_angle);
     
     // Local bottom center point (relative to box center)
-    Vector2 local_bottom_center = {0.0f, size.y * 0.5f};
+    Vector2 local_bottom_center = {-size.x * 0.5f, size.y * 0.5f};
     
     // Rotate and translate to world coordinates
     prediction_start_position = {

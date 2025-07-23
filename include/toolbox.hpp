@@ -3,12 +3,15 @@
 #include "box.hpp"
 #include "ball_and_string.hpp"
 #include "platform.hpp"
+#include <fstream>  // need for file creation
+#include <iostream>
 extern std::vector<Platform> all_platforms;
 
 class Toolbox {
 public:
     void Draw();
-    void Update(float dt, std::vector<Platform>& platforms); // Add platforms parameter
+    void Update(float dt, std::vector<Platform>& platforms);
+    void SavePlatformConfiguration(const std::vector<Platform>& platforms);
     
     std::vector<Object*> objects;
     

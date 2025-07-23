@@ -59,7 +59,12 @@ void Toolbox::Draw() {
 void Toolbox::Update(float dt, std::vector<Platform>& platforms) {
     if (!edit_mode) return;
     
-    // Toggle platform creation mode with '1' key
+    // save platform configuration with 'J' key
+    if (IsKeyPressed(KEY_J)) {
+        SavePlatformConfiguration(platforms);
+    }
+    
+    // toggle platform creation mode with '1' key
     if (IsKeyPressed(KEY_ONE)) {
         creating_platform = !creating_platform;
         mouse_pressed = false;
@@ -68,18 +73,16 @@ void Toolbox::Update(float dt, std::vector<Platform>& platforms) {
     if (creating_platform) {
         Vector2 mouse_pos = GetMousePosition();
         
-        // Start creating platform
         if (IsMouseButtonPressed(MOUSE_LEFT_BUTTON) && !mouse_pressed) {
             platform_start_pos = mouse_pos;
             mouse_pressed = true;
         }
         
-        // Update current position while dragging
+        // update current position while dragging
         if (mouse_pressed) {
             platform_current_pos = mouse_pos;
         }
         
-        // Finish creating platform
         if (IsMouseButtonReleased(MOUSE_LEFT_BUTTON) && mouse_pressed) {
             Vector2 size = { 
                 platform_current_pos.x - platform_start_pos.x,
@@ -101,4 +104,47 @@ void Toolbox::Update(float dt, std::vector<Platform>& platforms) {
             creating_platform = false; // Exit creation mode after creating
         }
     }
+}
+
+// THIS WILL ONLY SAVE IN EDIT MODE
+void Toolbox::SavePlatformConfiguration(const std::vector<Platform>& platforms) {
+    std::ofstream file("platform_config.txt");
+    
+    if (!file.is_open()) {
+        // Could add error handling here if needed
+        return;
+    }
+    
+    for (const Platform& platform : platforms) {
+        float cos_rot = cosf(platform.rotation * DEG2RAD);
+        float sin_rot = sinf(platform.rotation * DEG2RAD);
+        
+        // Local corner positions (relative to center)
+        Vector2 corners[4] = {
+            { -platform.size.x * 0.5f, -platform.size.y * 0.5f }, // top-left
+            {  platform.size.x * 0.5f, -platform.size.y * 0.5f }, // top-right
+            {  platform.size.x * 0.5f,  platform.size.y * 0.5f }, // bottom-right
+            { -platform.size.x * 0.5f,  platform.size.y * 0.5f }  // bottom-left
+        };
+        
+        // in reality, this should just be the corner position without rotation because
+        // the parser will most likely want to rotate the platform after the rectangle is created
+        Vector2 world_corners[4];
+        for (int i = 0; i < 4; i++) {
+            world_corners[i].x = corners[i].x * cos_rot - corners[i].y * sin_rot + platform.position.x;
+            world_corners[i].y = corners[i].x * sin_rot + corners[i].y * cos_rot + platform.position.y;
+        }
+        
+        // going into file in the format: R, x1y1,x2y2,x3y3,x4y4, rotation
+        file << "R, ";
+        for (int i = 0; i < 4; i++) {
+            file << "{ " << world_corners[i].x << " , " << world_corners[i].y << " }";
+            if (i < 3) file << ",";
+        }
+        file << ", " << platform.rotation << std::endl;
+    }
+
+    std::cout << "platform configuration saved to platform_config.txt" << std::endl;
+    
+    file.close();
 }
