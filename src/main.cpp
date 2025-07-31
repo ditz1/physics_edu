@@ -1,10 +1,12 @@
 #include "../include/raylib/raylib.h"
 #include "../include/toolbox.hpp"
+#include <cstring>
+#include <fstream>
+#include <iostream>
+#include <string>
 
 bool edit_mode = false;
 std::vector<Platform> all_platforms;
-
-
 
 typedef class Star {
 public:
@@ -24,7 +26,6 @@ public:
         };
     }
 } Star; 
-
 
 void DrawDebugInfo(Spring spring){
     float x_start = GetScreenWidth() - 300.0f;
@@ -52,8 +53,48 @@ void DrawDebugInfo2(Spring spring, Spring spring2){
     DrawText(TextFormat("%.2f = 2pi * sqrt(%.2f / %.2f)", T, L, g), x_start - 20, y_start + 80, 18, RAYWHITE);
 }
 
+// Function to load platform configuration from file
+void LoadPlatformConfigurationFromFile(const char* filename, std::vector<Platform>& platforms) {
+    std::ifstream file(filename);
+    
+    if (!file.is_open()) {
+        std::cerr << "Failed to open " << filename << std::endl;
+        return;
+    }
+    
+    platforms.clear(); // clear existing
+    
+    std::string line;
+    int platform_count = 0;
+    while (std::getline(file, line)) {
+        if (line.empty()) continue;
+        
+        char type;
+        float x1, y1, x2, y2, x3, y3, x4, y4, rotation;
+        
+        // Updated format string to handle spaces around numbers in braces
+        if (sscanf(line.c_str(), "%c, { %f , %f },{ %f , %f },{ %f , %f },{ %f , %f }, %f", 
+                   &type, &x1, &y1, &x2, &y2, &x3, &y3, &x4, &y4, &rotation) == 10) {
+            if (type == 'R') {
+                Vector2 pos = { (x1 + x3) * 0.5f, (y1 + y3) * 0.5f }; // Center position
+                Vector2 size = { fabs(x2 - x1), fabs(y3 - y1) }; // Size based on corners
+                
+                Platform new_platform(pos, size, rotation);
+                platforms.push_back(new_platform);
+                platform_count++;
+                std::cout << "Loaded platform " << platform_count << ": pos(" << pos.x << "," << pos.y 
+                         << ") size(" << size.x << "," << size.y << ") rot(" << rotation << ")" << std::endl;
+            }
+        } else {
+            std::cout << "Failed to parse line: " << line << std::endl;
+        }
+    }
+    
+    std::cout << "Platform configuration loaded from " << filename << " - " << platform_count << " platforms loaded" << std::endl;
+    file.close();
+}
 
-int main(void) {
+int main(int argc, char* argv[]) {
     const int screenWidth = 1280;
     const int screenHeight = 720;
 
@@ -61,19 +102,47 @@ int main(void) {
     SetConfigFlags(FLAG_WINDOW_RESIZABLE);
     InitWindow(screenWidth, screenHeight, "physics engine");
 
-
-    //DisableCursor();
     SetTargetFPS(60);
+    
+    all_platforms.reserve(10);
+    
+    // Parse command line arguments
+    bool config_loaded = false;
+    for (int i = 1; i < argc; i++) {
+        if (strcmp(argv[i], "-f") == 0 && i + 1 < argc) {
+            // Load configuration from specified file
+            LoadPlatformConfigurationFromFile(argv[i + 1], all_platforms);
+            config_loaded = true;
+            std::cout << "Loaded platform configuration from: " << argv[i + 1] << std::endl;
+            break;
+        }
+    }
+
+    // Only add default platforms if no config was loaded
+    if (!config_loaded) {
+        std::cout << "Using default platform configuration" << std::endl;
+        Vector2 plat_start = { screenWidth/2, screenHeight };
+        Vector2 plat_size = { screenWidth, 320.0f };
+        Platform platform = {plat_start, plat_size};
+
+        Vector2 plat_center_2 = { 375.0f, screenHeight - 50.0f };
+        Vector2 plat_size_2 = { 1050.0f, 325.0f };
+        float plat_rotation = 40.0f;
+        Platform platform2 = {plat_center_2, plat_size_2, plat_rotation};
+        
+        all_platforms.push_back(platform);
+        all_platforms.push_back(platform2);
+    }
+
     Spring spring;
     spring.anchor = { screenWidth / 2.0f, screenHeight / 2.0f - 200.0f };
     spring.position = { screenWidth / 2.0f, screenHeight / 2.0f + 50.0f };
-    // make it spawn to left so it falls down
     spring.mass = 2.0f;
     spring.spring_constant = 2.0f;
     spring.damping_factor = 0.05f;
     spring.rest_length = 250.0f;
 
-    float dt = 1.0f / 30.0f; // assume fixed time step, but if 60fps its will be this anyway
+    float dt = 1.0f / 30.0f;
 
     std::vector<Vector2> spring_path;
     spring_path.push_back(spring.position);
@@ -90,7 +159,6 @@ int main(void) {
     box.position = { 75.0f, screenHeight / 2.0f - 200.0f };
     box.mass = 100.0f;
 
-
     Toolbox toolbox;
     bool toolbox_active = true;
 
@@ -106,18 +174,6 @@ int main(void) {
     BallAndString ball_and_string = BallAndString({ screenWidth / 2.0f, screenHeight / 2.0f }, 200.0f, 0.0f);
     ball_and_string.path.push_back(ball_and_string.position);
 
-    Vector2 plat_start = { screenWidth/2, screenHeight };
-    Vector2 plat_size = { screenWidth, 320.0f };
-    Platform platform = {plat_start, plat_size};
-
-    Vector2 plat_center_2 = { 375.0f, screenHeight - 50.0f }; // center of platform
-    Vector2 plat_size_2 = { 1050.0f, 325.0f };
-    float plat_rotation = 40.0f; // degrees
-    Platform platform2 = {plat_center_2, plat_size_2, plat_rotation};
-    all_platforms.reserve(10);
-    all_platforms.push_back(platform);
-    all_platforms.push_back(platform2);
-
     while (!WindowShouldClose()) {
         
         ball_and_string.Update(dt);
@@ -126,14 +182,11 @@ int main(void) {
             ball_and_string.path.push_back(ball_and_string.position);
         }
 
-        
-
         spring.CheckGrab();
         if (spring.is_grabbed) {
             Vector2 mouse_position = GetMousePosition();
             spring.Grab(mouse_position);
         }
-
 
         bool was_grabbed_last_frame = box.is_grabbed;
         box.CheckGrab();
@@ -154,7 +207,6 @@ int main(void) {
             spring2.Grab(mouse_position);
         }
 
-
         for (Platform& platform : all_platforms) {
             platform.CheckGrab();
             if (platform.is_grabbed) {
@@ -173,28 +225,6 @@ int main(void) {
             }
         }
 
-            // platform.CheckGrab();
-            // if (platform.is_grabbed) {
-            //     Vector2 mouse_position = GetMousePosition();
-            //     platform.Grab(mouse_position);
-            //     if (IsKeyDown(KEY_Z)){
-            //         platform.rotation += 1.0f; // rotate platform clockwise
-            //     } else if (IsKeyDown(KEY_C)) {
-            //         platform.rotation -= 1.0f; // rotate platform counter-clockwise
-            //     }
-            // }
-            // platform2.CheckGrab();
-            // if (platform2.is_grabbed) {
-            //     Vector2 mouse_position = GetMousePosition();
-            //     platform2.Grab(mouse_position);
-            //     if (IsKeyDown(KEY_Z)){
-            //         platform2.rotation += 1.0f; // rotate platform clockwise
-            //     } else if (IsKeyDown(KEY_C)) {
-            //         platform2.rotation -= 1.0f; // rotate platform counter-clockwise
-            //     }
-            // }
-        
-
         points = 0;
         for (Star& s : stars){
             s.CheckCollision(spring);
@@ -203,11 +233,9 @@ int main(void) {
             }
         }
 
-
         if (IsKeyPressed(KEY_TAB)){
             toolbox_active = !toolbox_active;
         }
-        
 
         if (IsKeyPressed(KEY_LEFT)){
             box_force -= 1.0f;
@@ -242,13 +270,10 @@ int main(void) {
             box.was_colliding_last_frame = box.is_colliding; // store collision state for next frame
             box.last_platform_id = box.current_platform_id; // store last platform ID for next frame
             box.CheckCollision();
-            platform.Update(dt);
             spring_path.push_back(spring.position);
 
             ball_and_string.Update(dt);
         }
-
-      
 
         if (toolbox_active) {
             toolbox.Update(dt, all_platforms);
@@ -261,11 +286,8 @@ int main(void) {
         bool wasColliding = box.is_colliding;
         box.is_colliding = false;
 
-        for (size_t i = 0; i < all_platforms.size(); i++) {
-            if (!box.is_colliding) {
-                box.CheckPlatformCollisionSAT(all_platforms[i], i);
-            }
-        }
+        // Replace the SAT collision loop with raycast collision
+        box.CheckRaycastCollision(all_platforms);
 
         if (IsKeyDown(KEY_UP)) {
             ball_and_string.angularSpeed += 0.01f;
@@ -291,7 +313,6 @@ int main(void) {
                 toolbox.Draw();
             }
             
-
             ///////////////
             // SCENE 0_a ////
             ///////////////
@@ -354,15 +375,7 @@ int main(void) {
             // SCENE 2_b ////
             ///////////////
 
-            
-
             DrawText("get the box to the green square!", 400, 200, 20, RAYWHITE);
-
-            // Check collisions with both platforms
-            // box.CheckPlatformCollisionSAT(platform, 1);  // Platform ID 1 (higher priority)
-            // if (!box.is_colliding) {
-            //     box.CheckPlatformCollisionSAT(platform2, 0);   // Platform ID 0 (lower priority)
-            // }
 
             // Set color based on collision state
             if (wasColliding){
@@ -390,14 +403,18 @@ int main(void) {
             }
 
             Rectangle box_rect = { screenWidth - 200, 480, 100, 100 };
-            // platform.Draw();
-            // platform2.Draw();
             for (Platform& plat : all_platforms) {
                 plat.Draw();
             }
             DrawRectangleRec(box_rect, GREEN);
             box.Draw();
             box.DrawVectors();
+            box.DrawRaycasts(); // Draw raycasts for debugging
+
+            // Add raycast debugging
+            if (edit_mode) {
+                box.DrawRaycasts();
+            }
 
             if (CheckCollisionRecs(box_rect, box.Rect())){
                 DrawText("Nice!", box_rect.x - 100, box_rect.y - 100, 20, GREEN);
@@ -434,6 +451,5 @@ int main(void) {
     }
 
     CloseWindow();
-
     return 0;
 }

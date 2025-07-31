@@ -12,6 +12,7 @@ public:
     void Draw();
     void Update(float dt, std::vector<Platform>& platforms);
     void SavePlatformConfiguration(const std::vector<Platform>& platforms);
+    void LoadPlatformConfiguration(std::vector<Platform>& platforms);
     
     std::vector<Object*> objects;
     

@@ -24,10 +24,17 @@ public:
     Vector2 transition_point_stored;
     float distance_traveled = 0.0f;
 
+    // Raycast collision system
+    RaycastHit leftCornerHit;
+    RaycastHit rightCornerHit;
+    float raycastLength = 100.0f; // How far down to cast rays
+
     void Update(float dt) override;
     void Draw() override;
     void CheckCollision();
     void CheckPlatformCollisionSAT(const Platform& platform, int platform_id);    
+    void CheckRaycastCollision(const std::vector<Platform>& platforms);
+    void DrawRaycasts(); // For debugging
     void ApplyFriction(float dt);
     void SetPredictionStartPosition();
 
@@ -37,10 +44,8 @@ public:
     Vector2 CalculateStoppingPosition(const Platform& slope_platform, const Platform& horizontal_platform);
     void DrawGhost(const Platform& slope_platform, const Platform& horizontal_platform);
 
-
     Rectangle inline Rect() const {
         return (Rectangle){ position.x, position.y, size.x, size.y };
     }
     void CheckPlatformCollision(Rectangle platform_rect);
-    
 };
