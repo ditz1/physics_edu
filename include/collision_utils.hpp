@@ -4,6 +4,8 @@
 #include <vector>
 #include <cmath>
 
+class Platform;
+
 struct RotatedRectangle {
     Vector2 center;
     Vector2 size;

@@ -2,6 +2,15 @@
 #include <object.hpp>
 #include "platform.hpp"
 
+struct TrajectorySegment {
+    Vector2 start_position;
+    Vector2 end_position;
+    const Platform* platform;
+    float distance;
+};
+
+
+
 class Box : public Object {
 public:
     Box();
@@ -23,6 +32,11 @@ public:
     Vector2 ghost_position_stored;
     Vector2 transition_point_stored;
     float distance_traveled = 0.0f;
+    Texture2D* texture;
+
+    std::vector<TrajectorySegment> trajectory_segments;
+    Vector2 final_ghost_position;
+    bool multi_platform_ghost_calculated = false;
 
     void Update(float dt) override;
     void Draw() override;
@@ -30,13 +44,23 @@ public:
     void CheckPlatformCollisionSAT(const Platform& platform, int platform_id);    
     void ApplyFriction(float dt);
     void SetPredictionStartPosition();
+    bool IsPointOnPlatform(Vector2 point, const Platform& platform);
+    float GetDistanceToEndOfPlatform(Vector2 start_pos, const Platform& platform);
+    Vector2 GetPlatformDirection(const Platform& platform);
+    float CalculateFinalVelocity(float initial_velocity, const Platform& platform, float distance);
+    float CalculateStoppingDistanceOnPlatform(float initial_velocity, const Platform& platform);
+    float CalculateDistanceToConnection(Vector2 start_pos, const Platform& current_platform, const Platform& next_platform);
+    const Platform* FindNextPlatform(Vector2 current_pos, const std::vector<Platform>& platforms, const Platform* current_platform);
+    const Platform* FindNextConnectedPlatform(const Platform& current_platform, const std::vector<Platform>& platforms);
+    Vector2 GetRightEndOfPlatform(const Platform& platform);
+    const Platform* FindNextPlatformToRight(const Platform& current_platform, const std::vector<Platform>& platforms);
 
-    // Add these method declarations to your Box class
     float CalculateStoppingDistanceFromSlope(const Platform& slope_platform, float slope_travel_distance);
     float GetSlopeDistance(const Platform& platform);
     Vector2 CalculateStoppingPosition(const Platform& slope_platform, const Platform& horizontal_platform);
     void DrawGhost(const Platform& slope_platform, const Platform& horizontal_platform);
-
+    void DrawMultiPlatformGhost(const std::vector<Platform>& platforms);
+    void CalculateMultiPlatformTrajectory(const std::vector<Platform>& platforms);
 
     Rectangle inline Rect() const {
         return (Rectangle){ position.x, position.y, size.x, size.y };

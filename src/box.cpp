@@ -1,6 +1,7 @@
 #include <box.hpp>
 #include <iostream>
-
+#include <algorithm>
+#include <limits>
 
 Box::Box() {
     size = {50.0f, 50.0f};
@@ -53,12 +54,14 @@ void Box::Draw() {
         BLACK
     );
     
-    DrawRectanglePro(
-        (Rectangle){ position.x, position.y, size.x - border * 2, size.y - border * 2 }, 
-        (Vector2){ (size.x - border * 2) * 0.5f, (size.y - border * 2) * 0.5f }, // origin at center of smaller rect
-        rotation, 
-        color
-    );
+    // DrawRectanglePro(
+    //     (Rectangle){ position.x, position.y, size.x - border * 2, size.y - border * 2 }, 
+    //     (Vector2){ (size.x - border * 2) * 0.5f, (size.y - border * 2) * 0.5f }, // origin at center of smaller rect
+    //     rotation, 
+    //     color
+    // );
+
+    DrawTextureEx(*texture, { position.x - size.x, position.y - size.y }, rotation, 0.08f, WHITE);
     
     
     // Draw a circle at the position for reference
@@ -281,6 +284,7 @@ void Box::SetPredictionStartPosition() {
     };
     
     has_prediction_start = true;
+    multi_platform_ghost_calculated = false;
     ghost_calculated = false; // Reset ghost calculation
     std::cout << "Prediction start set at rotated bottom center: (" << prediction_start_position.x << ", " << prediction_start_position.y << ")" << std::endl;
 }
@@ -355,4 +359,387 @@ void Box::DrawGhost(const Platform& slope_platform, const Platform& horizontal_p
     Vector2 text_pos = {ghost_position_stored.x - 50, ghost_position_stored.y - 40};
     float slope_distance = Vector2Distance(prediction_start_position, transition_point_stored);
     DrawText(TextFormat("Start->Trans: %.1f", slope_distance), text_pos.x, text_pos.y, 14, ORANGE);
+}
+
+void Box::DrawMultiPlatformGhost(const std::vector<Platform>& platforms) {
+    if (!has_prediction_start) {
+        return;
+    }
+    
+    if (!multi_platform_ghost_calculated) {
+        CalculateMultiPlatformTrajectory(platforms);
+        multi_platform_ghost_calculated = true;
+    }
+    
+    // Draw all trajectory segments
+    for (size_t i = 0; i < trajectory_segments.size(); i++) {
+        const auto& segment = trajectory_segments[i];
+        
+        // Choose color based on platform type
+        Color line_color = (abs(segment.platform->rotation) > 5.0f) ? ORANGE : YELLOW;
+        
+        // Draw trajectory line
+        DrawLineEx(segment.start_position, segment.end_position, 3.0f, line_color);
+        
+        // Draw platform top line for reference
+        Color platform_color = (abs(segment.platform->rotation) > 5.0f) ? RED : BLUE;
+        DrawLineEx(segment.platform->top_left, segment.platform->top_right, 2.0f, platform_color);
+        
+        // Draw transition points
+        DrawCircleV(segment.end_position, 5, GREEN);
+    }
+    
+    // Draw starting position
+    DrawCircleV(prediction_start_position, 4, PURPLE);
+    
+    // Draw final ghost box
+    if (!trajectory_segments.empty()) {
+        float border = 2.0f;
+        DrawRectanglePro(
+            (Rectangle){ final_ghost_position.x, final_ghost_position.y, size.x, size.y }, 
+            (Vector2){ size.x * 0.5f, size.y * 0.5f }, 
+            0.0f,
+            (Color){255, 255, 255, 100}
+        );
+        
+        DrawRectanglePro(
+            (Rectangle){ final_ghost_position.x, final_ghost_position.y, size.x - border * 2, size.y - border * 2 }, 
+            (Vector2){ (size.x - border * 2) * 0.5f, (size.y - border * 2) * 0.5f }, 
+            0.0f,
+            (Color){color.r, color.g, color.b, 80}
+        );
+    }
+    
+    // Draw debug info
+    if (!trajectory_segments.empty()) {
+        Vector2 text_pos = {final_ghost_position.x - 50, final_ghost_position.y - 60};
+        float total_distance = 0;
+        for (const auto& segment : trajectory_segments) {
+            total_distance += segment.distance;
+        }
+        DrawText(TextFormat("Total dist: %.1f", total_distance), text_pos.x, text_pos.y, 14, WHITE);
+        DrawText(TextFormat("Segments: %d", trajectory_segments.size()), text_pos.x, text_pos.y + 20, 14, WHITE);
+    }
+}
+
+void Box::CalculateMultiPlatformTrajectory(const std::vector<Platform>& platforms) {
+    trajectory_segments.clear();
+    
+    Vector2 current_position = prediction_start_position;
+    float current_velocity = 0.0f; // Starting from rest
+    const Platform* current_platform = nullptr;
+    
+    // Find the starting platform
+    for (const auto& platform : platforms) {
+        if (IsPointOnPlatform(current_position, platform)) {
+            current_platform = &platform;
+            break;
+        }
+    }
+    
+    if (!current_platform) {
+        std::cout << "No starting platform found!" << std::endl;
+        return;
+    }
+    
+    int max_segments = 10;
+    int segment_count = 0;
+    
+    while (current_platform && segment_count < max_segments) {
+        TrajectorySegment segment;
+        segment.platform = current_platform;
+        segment.start_position = current_position;
+        
+        // Always move towards the RIGHT end of the current platform
+        Vector2 platform_right_end = GetRightEndOfPlatform(*current_platform);
+        float distance_to_right_end = Vector2Distance(current_position, platform_right_end);
+        
+        // Find the next platform that connects to the right
+        const Platform* next_platform = FindNextPlatformToRight(*current_platform, platforms);
+        Vector2 transition_point;
+        bool has_transition = false;
+        float distance_to_transition = distance_to_right_end;
+        
+        if (next_platform) {
+            // Find intersection point between current and next platform
+            if (CheckCollisionLines(current_platform->top_left, current_platform->top_right,
+                                   next_platform->top_left, next_platform->top_right, &transition_point)) {
+                // Make sure transition point is to the right of current position
+                if (transition_point.x > current_position.x) {
+                    has_transition = true;
+                    distance_to_transition = Vector2Distance(current_position, transition_point);
+                }
+            }
+        }
+        
+        Vector2 end_position;
+        float distance_traveled;
+        
+        // Check if box would stop before reaching transition/end
+        float stopping_distance = CalculateStoppingDistanceOnPlatform(current_velocity, *current_platform);
+        
+        if (has_transition) {
+            distance_traveled = std::min(distance_to_transition, stopping_distance);
+            if (distance_traveled >= stopping_distance) {
+                // Box stops before transition
+                end_position = Vector2Add(current_position, Vector2Scale(Vector2Normalize(Vector2Subtract(transition_point, current_position)), distance_traveled));
+                has_transition = false; // Won't reach next platform
+            } else {
+                // Box reaches transition point
+                end_position = transition_point;
+            }
+        } else {
+            // No transition, move towards right end of platform
+            distance_traveled = std::min(distance_to_right_end, stopping_distance);
+            end_position = Vector2Add(current_position, Vector2Scale(Vector2Normalize(Vector2Subtract(platform_right_end, current_position)), distance_traveled));
+        }
+        
+        // Calculate final velocity after traveling this distance
+        float final_velocity = CalculateFinalVelocity(current_velocity, *current_platform, distance_traveled);
+        
+        // Set up the segment
+        segment.end_position = end_position;
+        segment.distance = distance_traveled;
+        trajectory_segments.push_back(segment);
+        
+        // Check if we should stop
+        if (!has_transition || final_velocity <= 0.001f || distance_traveled >= stopping_distance) {
+            final_ghost_position = end_position;
+            if (final_velocity <= 0.001f || distance_traveled >= stopping_distance) {
+                std::cout << "Box stops on platform " << segment_count << std::endl;
+            } else {
+                std::cout << "Box reaches end of connected platforms at segment " << segment_count << std::endl;
+            }
+            break;
+        }
+        
+        // Continue to next platform
+        current_position = end_position;
+        current_velocity = final_velocity;
+        current_platform = next_platform;
+        segment_count++;
+    }
+}
+
+const Platform* Box::FindNextConnectedPlatform(const Platform& current_platform, const std::vector<Platform>& platforms) {
+    float tolerance = 30.0f;
+    const Platform* best_platform = nullptr;
+    float min_distance = std::numeric_limits<float>::max();
+    
+    for (const auto& platform : platforms) {
+        if (&platform == &current_platform) continue;
+        
+        // Check if platforms intersect or are very close
+        Vector2 intersection;
+        if (CheckCollisionLines(current_platform.top_left, current_platform.top_right,
+                               platform.top_left, platform.top_right, &intersection)) {
+            // Direct intersection - this is definitely connected
+            return &platform;
+        }
+        
+        // Check proximity between platform endpoints
+        float dist1 = Vector2Distance(current_platform.top_right, platform.top_left);
+        float dist2 = Vector2Distance(current_platform.top_right, platform.top_right);
+        float dist3 = Vector2Distance(current_platform.top_left, platform.top_left);
+        float dist4 = Vector2Distance(current_platform.top_left, platform.top_right);
+        
+        float min_dist = std::min({dist1, dist2, dist3, dist4});
+        
+        if (min_dist < tolerance && min_dist < min_distance) {
+            min_distance = min_dist;
+            best_platform = &platform;
+        }
+    }
+    
+    return best_platform;
+}
+
+bool Box::IsPointOnPlatform(Vector2 point, const Platform& platform) {
+    // Check if point is close to the platform's top surface
+    float tolerance = 10.0f;
+    
+    // Get platform top line
+    Vector2 line_start = platform.top_left;
+    Vector2 line_end = platform.top_right;
+    
+    // Calculate distance from point to line
+    float line_length = Vector2Distance(line_start, line_end);
+    if (line_length == 0) return false;
+    
+    Vector2 line_vec = Vector2Subtract(line_end, line_start);
+    Vector2 point_vec = Vector2Subtract(point, line_start);
+    
+    float t = Vector2DotProduct(point_vec, line_vec) / (line_length * line_length);
+    t = fmax(0.0f, fmin(1.0f, t)); // Clamp to line segment
+    
+    Vector2 closest_point = Vector2Add(line_start, Vector2Scale(line_vec, t));
+    float distance = Vector2Distance(point, closest_point);
+    
+    return distance <= tolerance;
+}
+
+float Box::GetDistanceToEndOfPlatform(Vector2 start_pos, const Platform& platform) {
+    Vector2 platform_direction = GetPlatformDirection(platform);
+    Vector2 platform_end;
+    
+    // Determine which end of the platform we're heading towards
+    float dot_to_right = Vector2DotProduct(Vector2Subtract(platform.top_right, start_pos), platform_direction);
+    float dot_to_left = Vector2DotProduct(Vector2Subtract(platform.top_left, start_pos), platform_direction);
+    
+    if (dot_to_right > 0 && dot_to_right > dot_to_left) {
+        platform_end = platform.top_right;
+    } else {
+        platform_end = platform.top_left;
+    }
+    
+    return Vector2Distance(start_pos, platform_end);
+}
+
+Vector2 Box::GetPlatformDirection(const Platform& platform) {
+    Vector2 direction = Vector2Subtract(platform.top_right, platform.top_left);
+    return Vector2Normalize(direction);
+}
+
+float Box::CalculateFinalVelocity(float initial_velocity, const Platform& platform, float distance) {
+    float slope_angle = platform.rotation * DEG2RAD;
+    
+    // Acceleration components
+    float gravity_component = gravity * sin(fabs(slope_angle));
+    float friction_component = mu_kinetic * gravity * cos(fabs(slope_angle));
+    
+    float acceleration;
+    if (abs(platform.rotation) > 5.0f) {
+        // Sloped platform
+        acceleration = gravity_component - friction_component;
+    } else {
+        // Horizontal platform - only friction (deceleration)
+        acceleration = -friction_component;
+    }
+    
+    // v² = u² + 2as
+    float final_velocity_squared = initial_velocity * initial_velocity + 2 * acceleration * distance;
+    
+    if (final_velocity_squared <= 0) {
+        return 0.0f; // Box stops
+    }
+    
+    return sqrt(final_velocity_squared);
+}
+
+
+float Box::CalculateStoppingDistanceOnPlatform(float initial_velocity, const Platform& platform) {
+    float slope_angle = platform.rotation * DEG2RAD;
+    
+    // Calculate acceleration on this platform
+    float gravity_component = gravity * sin(fabs(slope_angle));
+    float friction_component = mu_kinetic * gravity * cos(fabs(slope_angle));
+    
+    float acceleration;
+    if (abs(platform.rotation) > 5.0f) {
+        // Sloped platform - box accelerates down
+        acceleration = gravity_component - friction_component;
+        if (acceleration <= 0) {
+            return 0.0f; // Won't slide, stops immediately
+        }
+        // On slopes, box typically won't stop due to friction alone unless very steep
+        return std::numeric_limits<float>::max();
+    } else {
+        // Horizontal platform - only friction (deceleration)
+        acceleration = -friction_component;
+        if (acceleration >= 0 || initial_velocity <= 0) {
+            return std::numeric_limits<float>::max(); // No deceleration or no initial velocity
+        }
+    }
+    
+    // v² = u² + 2as, solving for s when v = 0
+    // 0 = u² + 2as → s = -u²/(2a)
+    float stopping_distance = -(initial_velocity * initial_velocity) / (2.0f * acceleration);
+    return std::max(0.0f, stopping_distance);
+}
+
+float Box::CalculateDistanceToConnection(Vector2 start_pos, const Platform& current_platform, const Platform& next_platform) {
+    // Find the connection point between current and next platform
+    Vector2 connection_point;
+    
+    // Check intersection between platform edges
+    if (CheckCollisionLines(current_platform.top_left, current_platform.top_right,
+                           next_platform.top_left, next_platform.top_right, &connection_point)) {
+        return Vector2Distance(start_pos, connection_point);
+    }
+    
+    // If no direct intersection, find closest connection
+    float dist_to_next_left = Vector2Distance(current_platform.top_right, next_platform.top_left);
+    float dist_to_next_right = Vector2Distance(current_platform.top_left, next_platform.top_right);
+    
+    if (dist_to_next_left < dist_to_next_right) {
+        return Vector2Distance(start_pos, current_platform.top_right);
+    } else {
+        return Vector2Distance(start_pos, current_platform.top_left);
+    }
+}
+
+const Platform* Box::FindNextPlatform(Vector2 current_pos, const std::vector<Platform>& platforms, const Platform* current_platform) {
+    float tolerance = 30.0f;
+    const Platform* closest_platform = nullptr;
+    float min_distance = std::numeric_limits<float>::max();
+    
+    // Get the direction we're moving on current platform
+    Vector2 movement_direction = GetPlatformDirection(*current_platform);
+    
+    for (const auto& platform : platforms) {
+        if (&platform == current_platform) continue;
+        
+        // Check both ends of the next platform
+        float dist_to_left = Vector2Distance(current_platform->top_right, platform.top_left);   // Changed . to ->
+        float dist_to_right = Vector2Distance(current_platform->top_left, platform.top_right);  // Changed . to ->
+        float min_dist = std::min(dist_to_left, dist_to_right);
+        
+        if (min_dist < tolerance && min_dist < min_distance) {
+            min_distance = min_dist;
+            closest_platform = &platform;
+        }
+    }
+    
+    return closest_platform;
+}
+
+Vector2 Box::GetRightEndOfPlatform(const Platform& platform) {
+    // Always return the rightmost point of the platform
+    if (platform.top_left.x > platform.top_right.x) {
+        return platform.top_left;
+    } else {
+        return platform.top_right;
+    }
+}
+
+const Platform* Box::FindNextPlatformToRight(const Platform& current_platform, const std::vector<Platform>& platforms) {
+    float tolerance = 30.0f;
+    const Platform* best_platform = nullptr;
+    float min_distance = std::numeric_limits<float>::max();
+    Vector2 current_right_end = GetRightEndOfPlatform(current_platform);
+    
+    for (const auto& platform : platforms) {
+        if (&platform == &current_platform) continue;
+        
+        // Only consider platforms that are to the right and close
+        Vector2 platform_left_end = (platform.top_left.x < platform.top_right.x) ? platform.top_left : platform.top_right;
+        Vector2 platform_right_end = (platform.top_left.x > platform.top_right.x) ? platform.top_left : platform.top_right;
+        
+        // Check if this platform is to the right of current platform
+        if (platform_left_end.x < current_right_end.x - tolerance) {
+            continue; // This platform is too far left
+        }
+        
+        // Check proximity to the right end of current platform
+        float dist_to_left = Vector2Distance(current_right_end, platform_left_end);
+        float dist_to_right = Vector2Distance(current_right_end, platform_right_end);
+        float min_dist = std::min(dist_to_left, dist_to_right);
+        
+        if (min_dist < tolerance && min_dist < min_distance) {
+            min_distance = min_dist;
+            best_platform = &platform;
+        }
+    }
+    
+    return best_platform;
 }

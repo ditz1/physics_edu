@@ -5,6 +5,8 @@
 #include "platform.hpp"
 #include <fstream>  // need for file creation
 #include <iostream>
+#include <string>
+
 extern std::vector<Platform> all_platforms;
 
 class Toolbox {
