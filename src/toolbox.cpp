@@ -63,10 +63,6 @@ void Toolbox::Update(float dt, std::vector<Platform>& platforms) {
     if (IsKeyPressed(KEY_J)) {
         SavePlatformConfiguration(platforms);
     }
-
-    if (IsKeyPressed(KEY_L)){
-        LoadPlatformConfiguration(platforms);
-    }
     
     // toggle platform creation mode with '1' key
     if (IsKeyPressed(KEY_ONE)) {
@@ -135,8 +131,8 @@ void Toolbox::SavePlatformConfiguration(const std::vector<Platform>& platforms) 
         // the parser will most likely want to rotate the platform after the rectangle is created
         Vector2 world_corners[4];
         for (int i = 0; i < 4; i++) {
-            world_corners[i].x = corners[i].x + platform.position.x;
-            world_corners[i].y = corners[i].y + platform.position.y;
+            world_corners[i].x = corners[i].x * cos_rot - corners[i].y * sin_rot + platform.position.x;
+            world_corners[i].y = corners[i].x * sin_rot + corners[i].y * cos_rot + platform.position.y;
         }
         
         // going into file in the format: R, x1y1,x2y2,x3y3,x4y4, rotation
@@ -150,39 +146,5 @@ void Toolbox::SavePlatformConfiguration(const std::vector<Platform>& platforms) 
 
     std::cout << "platform configuration saved to platform_config.txt" << std::endl;
     
-    file.close();
-}
-
-void Toolbox::LoadPlatformConfiguration(std::vector<Platform>& platforms) {
-    std::ifstream file("platform_config.txt");
-    
-    if (!file.is_open()) {
-        std::cerr << "Failed to open platform_config.txt" << std::endl;
-        return;
-    }
-    
-    platforms.clear(); // clear existing
-    
-    std::string line;
-    while (std::getline(file, line)) {
-        if (line.empty()) continue;
-        
-        char type;
-        float x1, y1, x2, y2, x3, y3, x4, y4, rotation;
-        
-        // Updated format string to handle spaces
-        if (sscanf(line.c_str(), "%c, { %f , %f },{ %f , %f },{ %f , %f },{ %f , %f }, %f", 
-                   &type, &x1, &y1, &x2, &y2, &x3, &y3, &x4, &y4, &rotation) == 10) {
-            if (type == 'R') {
-                Vector2 pos = { (x1 + x3) * 0.5f, (y1 + y3) * 0.5f }; // Center position
-                Vector2 size = { fabs(x2 - x1), fabs(y3 - y1) }; // Size based on corners
-                
-                Platform new_platform(pos, size, rotation);
-                platforms.push_back(new_platform);
-            }
-        }
-    }
-    
-    std::cout << "platform configuration loaded from platform_config.txt" << std::endl;
     file.close();
 }

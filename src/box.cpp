@@ -1,10 +1,10 @@
 #include <box.hpp>
 #include <iostream>
 
+
 Box::Box() {
     size = {50.0f, 50.0f};
 }
-
 Box::Box(int w, int h) {
     size = {static_cast<float>(w), static_cast<float>(h)};
 }
@@ -87,137 +87,6 @@ void Box::CheckCollision() {
     //     velocity.x = 0.0f; 
     //     acceleration.x = 0.0f; 
     // }
-}
-
-void Box::CheckRaycastCollision(const std::vector<Platform>& platforms) {
-    // Calculate rotated bottom corners
-    float box_angle = rotation * DEG2RAD;
-    float cos_rot = cosf(box_angle);
-    float sin_rot = sinf(box_angle);
-    
-    // Local bottom corner positions (relative to box center)
-    Vector2 local_bottom_left = {-size.x * 0.5f, size.y * 0.5f};
-    Vector2 local_bottom_right = {size.x * 0.5f, size.y * 0.5f};
-    
-    // Transform to world coordinates
-    Vector2 bottomLeft = {
-        local_bottom_left.x * cos_rot - local_bottom_left.y * sin_rot + position.x,
-        local_bottom_left.x * sin_rot + local_bottom_left.y * cos_rot + position.y
-    };
-    
-    Vector2 bottomRight = {
-        local_bottom_right.x * cos_rot - local_bottom_right.y * sin_rot + position.x,
-        local_bottom_right.x * sin_rot + local_bottom_right.y * cos_rot + position.y
-    };
-    
-    // Make raycast length dynamic based on velocity and add base length
-    float dynamic_raycast_length = raycastLength + fabs(velocity.y) * GetFrameTime() + 5.0f;
-    
-    // Cast rays downward
-    Vector2 leftRayEnd = {bottomLeft.x, bottomLeft.y + dynamic_raycast_length};
-    Vector2 rightRayEnd = {bottomRight.x, bottomRight.y + dynamic_raycast_length};
-    
-    auto leftHits = CollisionUtils::RaycastToAllPlatforms(bottomLeft, leftRayEnd, platforms);
-    auto rightHits = CollisionUtils::RaycastToAllPlatforms(bottomRight, rightRayEnd, platforms);
-    
-    // Get closest hits
-    leftCornerHit = leftHits.empty() ? RaycastHit{false, {0,0}, {0,0}, 0, nullptr} : leftHits[0];
-    rightCornerHit = rightHits.empty() ? RaycastHit{false, {0,0}, {0,0}, 0, nullptr} : rightHits[0];
-    
-    // Determine if we're colliding and how much to move
-    bool shouldCollide = false;
-    float moveDistance = 0;
-    Platform* hitPlatform = nullptr;
-    
-    // Smaller collision threshold to reduce jerkiness
-    float collision_threshold = 3.0f;
-    
-    if (leftCornerHit.hit && rightCornerHit.hit) {
-        // Both corners hit something - use the closest
-        float leftDistance = leftCornerHit.distance;
-        float rightDistance = rightCornerHit.distance;
-        
-        if (leftDistance < collision_threshold || rightDistance < collision_threshold) {
-            shouldCollide = true;
-            if (leftDistance < rightDistance) {
-                moveDistance = leftDistance;
-                hitPlatform = leftCornerHit.platform;
-            } else {
-                moveDistance = rightDistance;
-                hitPlatform = rightCornerHit.platform;
-            }
-        }
-    } else if (leftCornerHit.hit && leftCornerHit.distance < collision_threshold) {
-        shouldCollide = true;
-        moveDistance = leftCornerHit.distance;
-        hitPlatform = leftCornerHit.platform;
-    } else if (rightCornerHit.hit && rightCornerHit.distance < collision_threshold) {
-        shouldCollide = true;
-        moveDistance = rightCornerHit.distance;
-        hitPlatform = rightCornerHit.platform;
-    }
-    
-    if (shouldCollide && hitPlatform) {
-        is_colliding = true;
-        
-        // Gentle position correction - only move if we're actually penetrating
-        if (moveDistance < 1.0f) {
-            position.y -= (1.0f - moveDistance); // Move up just enough to get out
-        }
-        
-        rotation = hitPlatform->rotation; // Set box rotation to match platform
-        
-        // Only stop downward velocity, preserve horizontal velocity for slopes
-        if (velocity.y > 0) {
-            velocity.y = 0;
-        }
-    } else {
-        is_colliding = false;
-        rotation = 0; // Reset rotation when not on platform
-    }
-}
-
-void Box::DrawRaycasts() {
-    if (!edit_mode) return;
-    
-    // Use the same rotated corner calculation as in CheckRaycastCollision
-    float box_angle = rotation * DEG2RAD;
-    float cos_rot = cosf(box_angle);
-    float sin_rot = sinf(box_angle);
-    
-    Vector2 local_bottom_left = {-size.x * 0.5f, size.y * 0.5f};
-    Vector2 local_bottom_right = {size.x * 0.5f, size.y * 0.5f};
-    
-    Vector2 bottomLeft = {
-        local_bottom_left.x * cos_rot - local_bottom_left.y * sin_rot + position.x,
-        local_bottom_left.x * sin_rot + local_bottom_left.y * cos_rot + position.y
-    };
-    
-    Vector2 bottomRight = {
-        local_bottom_right.x * cos_rot - local_bottom_right.y * sin_rot + position.x,
-        local_bottom_right.x * sin_rot + local_bottom_right.y * cos_rot + position.y
-    };
-    
-    float dynamic_raycast_length = raycastLength + fabs(velocity.y) * GetFrameTime() + 5.0f;
-    Vector2 leftRayEnd = {bottomLeft.x, bottomLeft.y + dynamic_raycast_length};
-    Vector2 rightRayEnd = {bottomRight.x, bottomRight.y + dynamic_raycast_length};
-    
-    // Draw rays
-    DrawLineEx(bottomLeft, leftRayEnd, 2.0f, YELLOW);
-    DrawLineEx(bottomRight, rightRayEnd, 2.0f, YELLOW);
-    
-    // Draw hit points
-    if (leftCornerHit.hit) {
-        DrawCircleV(leftCornerHit.point, 5.0f, GREEN);
-        DrawText(TextFormat("L: %.1f", leftCornerHit.distance), 
-                leftCornerHit.point.x - 20, leftCornerHit.point.y - 20, 12, GREEN);
-    }
-    
-    if (rightCornerHit.hit) {
-        DrawCircleV(rightCornerHit.point, 5.0f, GREEN);
-        DrawText(TextFormat("R: %.1f", rightCornerHit.distance), 
-                rightCornerHit.point.x + 10, rightCornerHit.point.y - 20, 12, GREEN);
-    }
 }
 
 void Box::CheckPlatformCollision(Rectangle platform_rect) {
@@ -334,6 +203,7 @@ void Box::ApplyFriction(float dt) {
     }
 }
 
+
 float Box::CalculateStoppingDistanceFromSlope(const Platform& slope_platform, float slope_travel_distance) {
     //
     // on slope
@@ -390,99 +260,99 @@ Vector2 Box::CalculateStoppingPosition(const Platform& slope_platform, const Pla
     // Calculate position on horizontal platform where box will stop
     Vector2 horizontal_direction = {1.0f, 0.0f}; // Assuming horizontal platform is flat
     Vector2 stopping_position = Vector2Add(horizontal_platform.position, 
-                                         Vector2Scale(horizontal_direction, horizontal_stopping_distance));
-   
-   return stopping_position;
+                                          Vector2Scale(horizontal_direction, horizontal_stopping_distance));
+    
+    return stopping_position;
 }
 
 void Box::SetPredictionStartPosition() {
-   // Calculate the bottom center of the rotated box
-   float box_angle = rotation * DEG2RAD;
-   float cos_rot = cosf(box_angle);
-   float sin_rot = sinf(box_angle);
-   
-   // Local bottom center point (relative to box center)
-   Vector2 local_bottom_center = {-size.x * 0.5f, size.y * 0.5f};
-   
-   // Rotate and translate to world coordinates
-   prediction_start_position = {
-       local_bottom_center.x * cos_rot - local_bottom_center.y * sin_rot + position.x,
-       local_bottom_center.x * sin_rot + local_bottom_center.y * cos_rot + position.y
-   };
-   
-   has_prediction_start = true;
-   ghost_calculated = false; // Reset ghost calculation
-   std::cout << "Prediction start set at rotated bottom center: (" << prediction_start_position.x << ", " << prediction_start_position.y << ")" << std::endl;
+    // Calculate the bottom center of the rotated box
+    float box_angle = rotation * DEG2RAD;
+    float cos_rot = cosf(box_angle);
+    float sin_rot = sinf(box_angle);
+    
+    // Local bottom center point (relative to box center)
+    Vector2 local_bottom_center = {-size.x * 0.5f, size.y * 0.5f};
+    
+    // Rotate and translate to world coordinates
+    prediction_start_position = {
+        local_bottom_center.x * cos_rot - local_bottom_center.y * sin_rot + position.x,
+        local_bottom_center.x * sin_rot + local_bottom_center.y * cos_rot + position.y
+    };
+    
+    has_prediction_start = true;
+    ghost_calculated = false; // Reset ghost calculation
+    std::cout << "Prediction start set at rotated bottom center: (" << prediction_start_position.x << ", " << prediction_start_position.y << ")" << std::endl;
 }
 
 void Box::DrawGhost(const Platform& slope_platform, const Platform& horizontal_platform) {
-   if (!has_prediction_start) {
-       return; // No prediction start position set yet
-       }
-   
-   if (!ghost_calculated) {
-       // Calculate once from the fixed starting position
-       Vector2 slope_line_start = slope_platform.top_left;
-       Vector2 slope_line_end = slope_platform.top_right;
-       Vector2 hori_line_start = horizontal_platform.top_left;
-       Vector2 hori_line_end = horizontal_platform.top_right;
-       Vector2 intersect;
+    if (!has_prediction_start) {
+        return; // No prediction start position set yet
+    }
+    
+    if (!ghost_calculated) {
+        // Calculate once from the fixed starting position
+        Vector2 slope_line_start = slope_platform.top_left;
+        Vector2 slope_line_end = slope_platform.top_right;
+        Vector2 hori_line_start = horizontal_platform.top_left;
+        Vector2 hori_line_end = horizontal_platform.top_right;
+        Vector2 intersect;
 
-       if (CheckCollisionLines(slope_line_start, slope_line_end, hori_line_start, hori_line_end, &intersect)) {
-           transition_point_stored = intersect;
-           
-           // Use FIXED starting position for calculation
-           float slope_distance = Vector2Distance(prediction_start_position, transition_point_stored);
-           float horizontal_stopping_distance = CalculateStoppingDistanceFromSlope(slope_platform, slope_distance);
-           
-           Vector2 horizontal_direction = {1.0f, 0.0f};
-           if (slope_platform.rotation > 0) {
-               horizontal_direction.x = 1.0f;
-           } else {
-               horizontal_direction.x = -1.0f;
-           }
-           
-           ghost_position_stored = Vector2Add(transition_point_stored, 
-                                            Vector2Scale(horizontal_direction, horizontal_stopping_distance));
-           ghost_calculated = true;
-           
-           std::cout << "Ghost calculated - slope distance: " << slope_distance << ", horizontal distance: " << horizontal_stopping_distance << std::endl;
-       } else {
-           std::cout << "No intersection found between slope and horizontal platform." << std::endl;
-           return;
-       }
-   }
-   
-   // Draw debug lines
-   DrawLineEx(slope_platform.top_left, slope_platform.top_right, 2.0f, RED);
-   DrawLineEx(horizontal_platform.top_left, horizontal_platform.top_right, 2.0f, BLUE);
-   DrawCircleV(transition_point_stored, 5, GREEN);
-   
-   // Draw the predicted path from FIXED starting position
-   DrawLineEx(prediction_start_position, transition_point_stored, 3.0f, ORANGE); // Down the slope
-   DrawLineEx(transition_point_stored, ghost_position_stored, 3.0f, YELLOW); // Along horizontal
-   
-   // Draw starting position marker
-   DrawCircleV(prediction_start_position, 4, PURPLE);
-   
-   // Draw ghost box at calculated position
-   float border = 2.0f;
-   DrawRectanglePro(
-       (Rectangle){ ghost_position_stored.x, ghost_position_stored.y, size.x, size.y }, 
-       (Vector2){ size.x * 0.5f, size.y * 0.5f }, 
-       0.0f,
-       (Color){255, 255, 255, 100}
-   );
-   
-   DrawRectanglePro(
-       (Rectangle){ ghost_position_stored.x, ghost_position_stored.y, size.x - border * 2, size.y - border * 2 }, 
-       (Vector2){ (size.x - border * 2) * 0.5f, (size.y - border * 2) * 0.5f }, 
-       0.0f,
-       (Color){color.r, color.g, color.b, 80}
-   );
-   
-   // Show debug info
-   Vector2 text_pos = {ghost_position_stored.x - 50, ghost_position_stored.y - 40};
-   float slope_distance = Vector2Distance(prediction_start_position, transition_point_stored);
-   DrawText(TextFormat("Start->Trans: %.1f", slope_distance), text_pos.x, text_pos.y, 14, ORANGE);
+        if (CheckCollisionLines(slope_line_start, slope_line_end, hori_line_start, hori_line_end, &intersect)) {
+            transition_point_stored = intersect;
+            
+            // Use FIXED starting position for calculation
+            float slope_distance = Vector2Distance(prediction_start_position, transition_point_stored);
+            float horizontal_stopping_distance = CalculateStoppingDistanceFromSlope(slope_platform, slope_distance);
+            
+            Vector2 horizontal_direction = {1.0f, 0.0f};
+            if (slope_platform.rotation > 0) {
+                horizontal_direction.x = 1.0f;
+            } else {
+                horizontal_direction.x = -1.0f;
+            }
+            
+            ghost_position_stored = Vector2Add(transition_point_stored, 
+                                             Vector2Scale(horizontal_direction, horizontal_stopping_distance));
+            ghost_calculated = true;
+            
+            std::cout << "Ghost calculated - slope distance: " << slope_distance << ", horizontal distance: " << horizontal_stopping_distance << std::endl;
+        } else {
+            std::cout << "No intersection found between slope and horizontal platform." << std::endl;
+            return;
+        }
+    }
+    
+    // Draw debug lines
+    DrawLineEx(slope_platform.top_left, slope_platform.top_right, 2.0f, RED);
+    DrawLineEx(horizontal_platform.top_left, horizontal_platform.top_right, 2.0f, BLUE);
+    DrawCircleV(transition_point_stored, 5, GREEN);
+    
+    // Draw the predicted path from FIXED starting position
+    DrawLineEx(prediction_start_position, transition_point_stored, 3.0f, ORANGE); // Down the slope
+    DrawLineEx(transition_point_stored, ghost_position_stored, 3.0f, YELLOW); // Along horizontal
+    
+    // Draw starting position marker
+    DrawCircleV(prediction_start_position, 4, PURPLE);
+    
+    // Draw ghost box at calculated position
+    float border = 2.0f;
+    DrawRectanglePro(
+        (Rectangle){ ghost_position_stored.x, ghost_position_stored.y, size.x, size.y }, 
+        (Vector2){ size.x * 0.5f, size.y * 0.5f }, 
+        0.0f,
+        (Color){255, 255, 255, 100}
+    );
+    
+    DrawRectanglePro(
+        (Rectangle){ ghost_position_stored.x, ghost_position_stored.y, size.x - border * 2, size.y - border * 2 }, 
+        (Vector2){ (size.x - border * 2) * 0.5f, (size.y - border * 2) * 0.5f }, 
+        0.0f,
+        (Color){color.r, color.g, color.b, 80}
+    );
+    
+    // Show debug info
+    Vector2 text_pos = {ghost_position_stored.x - 50, ghost_position_stored.y - 40};
+    float slope_distance = Vector2Distance(prediction_start_position, transition_point_stored);
+    DrawText(TextFormat("Start->Trans: %.1f", slope_distance), text_pos.x, text_pos.y, 14, ORANGE);
 }
