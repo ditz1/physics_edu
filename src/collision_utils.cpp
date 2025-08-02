@@ -167,6 +167,9 @@ std::vector<LineSegment> CollisionUtils::GetBoxBottomLines(const Vector2& boxPos
 TwoLineCollisionInfo CollisionUtils::CheckTwoLineCollision(const std::vector<LineSegment>& lines, const std::vector<Platform>& platforms) {
     TwoLineCollisionInfo collisionInfo = { false, {0, 0}, std::numeric_limits<float>::max(), {0, 1}, -1 };
     
+    // First pass: find all valid collisions
+    std::vector<TwoLineCollisionInfo> allCollisions;
+    
     // Check each line against each platform
     for (const auto& line : lines) {
         for (size_t i = 0; i < platforms.size(); i++) {
@@ -174,14 +177,11 @@ TwoLineCollisionInfo CollisionUtils::CheckTwoLineCollision(const std::vector<Lin
             
             float distance = GetDistanceToPlatform(line, platform);
             
-            // If this line is closer to a platform than any previous collision
-            if (distance < collisionInfo.distanceToPlatform) {
+            // If this is a valid collision
+            if (distance < std::numeric_limits<float>::max()) {
                 Vector2 closestPoint = GetClosestPointOnPlatform(line, platform);
                 
-                collisionInfo.hasCollision = true;
-                collisionInfo.collisionPoint = closestPoint;
-                collisionInfo.distanceToPlatform = distance;
-                collisionInfo.platformId = static_cast<int>(i);
+                TwoLineCollisionInfo tempCollision = { true, closestPoint, distance, {0, 1}, static_cast<int>(i) };
                 
                 // Calculate normal (pointing upward from platform)
                 Vector2 platformDirection = Vector2Subtract(platform.top_right, platform.top_left);
@@ -193,15 +193,21 @@ TwoLineCollisionInfo CollisionUtils::CheckTwoLineCollision(const std::vector<Lin
                     normal = Vector2Scale(normal, -1);
                 }
                 
-                collisionInfo.normal = normal;
+                tempCollision.normal = normal;
+                allCollisions.push_back(tempCollision);
             }
         }
     }
     
-    // If no collision found, reset the collision info
-    if (collisionInfo.distanceToPlatform == std::numeric_limits<float>::max()) {
-        collisionInfo.hasCollision = false;
-        collisionInfo.platformId = -1;
+    // If we have collisions, prioritize by platform ID (higher ID wins)
+    if (!allCollisions.empty()) {
+        // Sort by platform ID in descending order (highest first)
+        std::sort(allCollisions.begin(), allCollisions.end(), 
+                  [](const TwoLineCollisionInfo& a, const TwoLineCollisionInfo& b) {
+                      return a.platformId > b.platformId;
+                  });
+        
+        collisionInfo = allCollisions[0]; // Take the highest priority collision
     }
     
     return collisionInfo;
@@ -219,7 +225,7 @@ float CollisionUtils::GetDistanceToPlatform(const LineSegment& line, const Platf
     
     // Only consider collision if the line is above the platform surface
     // and the distance is very small (essentially touching)
-    if (line.start.y > closestPoint.y && distance < 2.0f) {
+    if (line.start.y > closestPoint.y && distance < 5.0f) {
         return distance;
     }
     
@@ -227,38 +233,40 @@ float CollisionUtils::GetDistanceToPlatform(const LineSegment& line, const Platf
 }
 
 Vector2 CollisionUtils::GetClosestPointOnPlatform(const LineSegment& line, const Platform& platform) {
-    // Get the platform's top edge as a line segment
     LineSegment platformLine = { platform.top_left, platform.top_right };
     
-    // Get the X coordinate of the vertical line
+    // Find the Y coordinate on the platform line for a given X coordinate of the vertical line
     float lineX = line.start.x;
     
-    // Find the Y coordinate on the platform line for this X coordinate
-    Vector2 platformDir = Vector2Subtract(platformLine.end, platformLine.start);
-    float platformLength = Vector2Length(platformDir);
+    // Calculate the slope of the platform line
+    float platform_dx = platformLine.end.x - platformLine.start.x;
+    float platform_dy = platformLine.end.y - platformLine.start.y;
     
-    if (platformLength == 0) {
-        return platformLine.start; // Platform is a point
-    }
-    
-    // Calculate the Y coordinate on the platform line for the given X coordinate
-    // This is the point where a vertical line at lineX would intersect the platform
-    float platformSlope = platformDir.y / platformDir.x;
-    float platformY = platformLine.start.y + platformSlope * (lineX - platformLine.start.x);
-    
-    // Clamp to platform bounds
-    float minX = fmin(platformLine.start.x, platformLine.end.x);
-    float maxX = fmax(platformLine.start.x, platformLine.end.x);
-    
-    if (lineX < minX || lineX > maxX) {
-        // Line is outside platform bounds, return closest endpoint
-        if (lineX < minX) {
-            return platformLine.start;
-        } else {
-            return platformLine.end;
+    if (platform_dx == 0) { // Vertical platform line
+        // If the lineX is within the platform's X range, return the closest Y on the platform
+        if (lineX >= fmin(platformLine.start.x, platformLine.end.x) &&
+            lineX <= fmax(platformLine.start.x, platformLine.end.x)) {
+            return {lineX, platformLine.start.y}; // Or platformLine.end.y, as X is constant
         }
+        return platformLine.start; // Fallback
     }
     
-    // Return the point on the platform line at the given X coordinate
-    return {lineX, platformY};
+    float slope = platform_dy / platform_dx;
+    
+    // Calculate the Y intercept (b) of the platform line (y = mx + b)
+    float intercept = platformLine.start.y - slope * platformLine.start.x;
+    
+    // Calculate the Y coordinate on the platform line for lineX
+    float closestY = slope * lineX + intercept;
+    
+    Vector2 closestPoint = {lineX, closestY};
+    
+    // Clamp the closest point to the segment bounds
+    float t = 0.0f;
+    if (platform_dx != 0 || platform_dy != 0) {
+        t = Vector2DotProduct(Vector2Subtract(closestPoint, platformLine.start), Vector2Subtract(platformLine.end, platformLine.start)) / Vector2LengthSqr(Vector2Subtract(platformLine.end, platformLine.start));
+    }
+    t = fmax(0.0f, fmin(1.0f, t));
+    
+    return Vector2Add(platformLine.start, Vector2Scale(Vector2Subtract(platformLine.end, platformLine.start), t));
 }

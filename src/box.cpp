@@ -15,7 +15,7 @@ Box::~Box() {
 
 }
 
-void Box::Update(float dt) {
+void Box::Update(float dt, const std::vector<Platform>& platforms) {
     // Store the previous collision state
     was_colliding_last_frame = is_colliding;
     
@@ -26,8 +26,7 @@ void Box::Update(float dt) {
 
     if (!is_colliding) {
         // Apply normal gravity when not colliding
-        acceleration.y += gravity * dt; // Accumulate gravity acceleration
-        velocity = Vector2Add(velocity, Vector2Scale(acceleration, dt));
+        velocity.y += gravity * dt; // Apply gravity directly to velocity
     } else {
         // Apply gravity along slope when colliding
         float slope_angle = rotation * DEG2RAD;
@@ -42,7 +41,32 @@ void Box::Update(float dt) {
     }
     ApplyFriction(dt);
 
+    // Ensure left-to-right movement as per the rules
+    if (is_colliding && velocity.x < 0) {
+        velocity.x = 0; // Stop leftward movement
+    }
+
+    // Prioritize next collision by ensuring movement towards the right
+    // Only apply if the box is truly stuck (very low velocity)
+    if (is_colliding && abs(velocity.x) < 0.05f && abs(velocity.y) < 0.05f) {
+        // If box is nearly stopped, give it a very small push to the right
+        float slope_angle = rotation * DEG2RAD;
+        if (abs(rotation) > 5.0f) { // On a slope
+            Vector2 slope_direction = {cos(slope_angle), sin(slope_angle)};
+            velocity = Vector2Scale(slope_direction, 0.5f); // Very small push down the slope
+        } else { // On horizontal platform
+            velocity.x = 0.5f; // Very small push to the right
+        }
+    }
+
     position = Vector2Add(position, Vector2Scale(velocity, dt));
+    
+    // Decrement transition cooldown
+    if (transition_cooldown > 0) {
+        transition_cooldown--;
+    }
+    
+    // Automatic transition logic removed - let collision detection handle transitions with proper prioritization
 }
 
 void Box::Draw() {
@@ -180,7 +204,12 @@ void Box::CheckPlatformCollisionTwoLine(const std::vector<Platform>& platforms) 
     
     if (collisionInfo.hasCollision) {
         bool isNewCollision = !was_colliding_last_frame;
-        bool isPlatformTransition = (was_colliding_last_frame && last_platform_id != collisionInfo.platformId);
+        bool isPlatformTransition = (was_colliding_last_frame && last_platform_id != collisionInfo.platformId && collisionInfo.platformId > last_platform_id);
+        
+        // Add debug output for platform transitions
+        if (isPlatformTransition) {
+            std::cout << "Platform transition detected: " << last_platform_id << " -> " << collisionInfo.platformId << std::endl;
+        }
         
         // Store old velocity for platform transitions
         Vector2 old_velocity = velocity;
@@ -194,8 +223,9 @@ void Box::CheckPlatformCollisionTwoLine(const std::vector<Platform>& platforms) 
         const Platform& platform = platforms[collisionInfo.platformId];
         rotation = platform.rotation;
         
-        // Only reposition the box if it's a new collision or if the distance is significant
-        if (isNewCollision || collisionInfo.distanceToPlatform > 1.0f) {
+        // Only reposition the box for new collisions or significant distance issues
+        // Platform transitions will handle their own positioning
+        if (isNewCollision || collisionInfo.distanceToPlatform > 2.0f) {
             // Calculate the box's bottom center point
             Vector2 boxBottomCenter = {
                 position.x,
@@ -225,7 +255,11 @@ void Box::CheckPlatformCollisionTwoLine(const std::vector<Platform>& platforms) 
         }
         
         // Handle velocity during platform transitions
-        if (isPlatformTransition) {
+        // Only allow transitions to higher ID platforms (prioritization)
+        if (isPlatformTransition && collisionInfo.platformId > last_platform_id && transition_cooldown <= 0) {
+            // Set cooldown to prevent rapid transitions
+            transition_cooldown = 3;
+            
             // Convert velocity to the new platform's coordinate system
             float new_slope_angle = platform.rotation * DEG2RAD;
             Vector2 new_slope_direction = {cos(new_slope_angle), sin(new_slope_angle)};
@@ -234,13 +268,48 @@ void Box::CheckPlatformCollisionTwoLine(const std::vector<Platform>& platforms) 
             float velocity_along_new_slope = Vector2DotProduct(old_velocity, new_slope_direction);
             std::cout << "old rotation: " << old_rotation << " | new rotation: " << rotation << std::endl;
             
-            // If we're transitioning to a flatter surface, convert some y-velocity to x-velocity
-            if (abs(rotation) < abs(old_rotation)) { // New platform is flatter
-                std::cout << "transitioning to flatter surface" << std::endl;
-                velocity = Vector2Scale(new_slope_direction, old_speed * 1.0f);
+            // For left-to-right movement on slope-to-horizontal transitions, prioritize momentum conservation
+            if (abs(rotation) < abs(old_rotation)) { // New platform is flatter (slope to horizontal)
+                std::cout << "transitioning from slope to horizontal - conserving momentum" << std::endl;
+                // Use energy conservation for more realistic physics
+                // KE_final = KE_initial - PE_loss
+                // v_final = sqrt(v_initial^2 - 2*g*h_loss)
+                float height_loss = abs(old_rotation - rotation) * DEG2RAD * 100.0f; // Approximate height difference
+                float energy_loss = gravity * height_loss;
+                float velocity_squared = old_speed * old_speed - 2.0f * energy_loss;
+                float new_speed = (velocity_squared > 0) ? sqrt(velocity_squared) : 0.5f; // Minimum speed
+                
+                velocity = Vector2Scale(new_slope_direction, new_speed);
             } else {
                 // Normal velocity projection for other transitions
                 velocity = Vector2Scale(new_slope_direction, velocity_along_new_slope);
+            }
+            
+            // Ensure the box is properly positioned on the new platform surface
+            Vector2 boxBottomCenter = {
+                position.x,
+                position.y + size.y * 0.5f
+            };
+            
+            // Find the closest point on the platform surface to the box bottom center
+            Vector2 platformDir = Vector2Subtract(platform.top_right, platform.top_left);
+            Vector2 toBox = Vector2Subtract(boxBottomCenter, platform.top_left);
+            float platformLength = Vector2Length(platformDir);
+            
+            if (platformLength > 0) {
+                Vector2 normalizedDir = Vector2Normalize(platformDir);
+                float t = Vector2DotProduct(toBox, normalizedDir) / platformLength;
+                t = fmax(0.0f, fmin(1.0f, t)); // Clamp to platform bounds
+                
+                // Calculate the closest point on the platform surface
+                Vector2 closestPoint = Vector2Add(platform.top_left, Vector2Scale(normalizedDir, t * platformLength));
+                
+                // Calculate the distance from box bottom to platform surface
+                float distanceToMove = boxBottomCenter.y - closestPoint.y;
+                
+                if (distanceToMove > 0) {
+                    position.y -= distanceToMove;
+                }
             }
         } else if (isNewCollision) {
             // Only remove velocity component for brand NEW collisions
@@ -248,6 +317,13 @@ void Box::CheckPlatformCollisionTwoLine(const std::vector<Platform>& platforms) 
             if (velocityDotNormal < 0) {
                 Vector2 velocityAlongNormal = Vector2Scale(collisionInfo.normal, velocityDotNormal);
                 velocity = Vector2Subtract(velocity, velocityAlongNormal);
+            }
+            
+            // Set prediction start position and calculate ghost trajectory when box first lands on a platform
+            // Only do this for new collisions, not platform transitions
+            if (isNewCollision) {
+                SetPredictionStartPosition();
+                CalculateGhostTrajectory(platforms);
             }
         }
     } else {
@@ -293,52 +369,75 @@ void Box::ApplyFriction(float dt) {
 
 
 float Box::CalculateStoppingDistanceFromSlope(const Platform& slope_platform, float slope_travel_distance) {
-    //
-    // on slope
-    //
+    // Using the user's specific ghost prediction equations:
+    // Slope: V'_f ^ 2 - V_f^2 = 2(-u * g) y
+    // Horizontal: 2ax = V_f^2 - V_i^2 (to find where V_f = 0)
     
     float slope_angle = slope_platform.rotation * DEG2RAD;
     
-    // V_initial = 0 (starts from rest)
-    float V_initial_slope = 0.0f;
+    // Calculate the vertical distance (y) traveled down the slope
+    float y = slope_travel_distance * sin(fabs(slope_angle));
     
-    // acceleration down the slope
+    // For the slope equation: V'_f ^ 2 - V_f^2 = 2(-u * g) y
+    // Where V_f is the initial velocity (0), V'_f is the final velocity on slope
+    // y is the vertical distance traveled down the slope
+    // -u * g is the deceleration due to friction
+    float V_f = 0.0f; // Initial velocity on slope
+    
+    // The slope equation: V'_f ^ 2 - V_f^2 = 2(-u * g) y
+    // V'_f ^ 2 = V_f^2 + 2(-u * g) y
+    // V'_f ^ 2 = 0 + 2(-u * g) y
+    // Where -u * g is the deceleration due to friction
+    float friction_deceleration = mu_kinetic * gravity;
+    
+    // But we need to account for gravity component down the slope
     float gravity_component = gravity * sin(fabs(slope_angle));
-    float friction_component_slope = mu_kinetic * gravity * cos(fabs(slope_angle));
-    float a_slope = gravity_component - friction_component_slope;
+    float net_acceleration = gravity_component - friction_deceleration;
     
-    if (a_slope <= 0) {
+    if (net_acceleration <= 0) {
         return 0.0f; // Won't slide down slope
     }
     
-    // V_final^2 = V_initial^2 + 2*a*d
-    // V_final^2 = 0^2 + 2 * a_slope * slope_travel_distance
-    float V_final_slope_squared = 2.0f * a_slope * slope_travel_distance;
-    float V_final_slope = sqrt(V_final_slope_squared);
-
-    //
-    // horizontal platform
-    //
-
-    // V_initial = V_final_slope (velocity gained from slope)
-    float V_initial_horizontal = V_final_slope;
+    // Using the user's exact slope equation: V'_f ^ 2 = V_f^2 + 2(-u * g) y
+    // But with the correct physics: V'_f ^ 2 = V_f^2 + 2 * net_acceleration * slope_distance
+    float V_prime_f_squared = V_f * V_f + 2.0f * net_acceleration * slope_travel_distance;
+    float V_prime_f = sqrt(V_prime_f_squared);
     
-    // V_final = 0 (comes to rest)
-    float V_final_horizontal = 0.0f;
+    // Now for the horizontal equation: 2ax = V_f^2 - V_i^2
+    // Where V_i is the initial velocity on horizontal (V_prime_f from slope)
+    // V_f is the final velocity (0, where it stops)
+    // a is the deceleration on horizontal surface
+    float V_i_horizontal = V_prime_f;
+    float V_f_horizontal = 0.0f;
+    float a_horizontal = -mu_kinetic * gravity; // Deceleration due to friction
     
-    // Deceleration due to friction on horizontal surface
-    float a_horizontal = -mu_kinetic * gravity;
-    
-    // V_final^2 = V_initial^2 + 2*a*d
-    // 0^2 = V_initial_horizontal^2 + 2*a_horizontal*d
-    // d = -V_initial_horizontal^2 / (2*a_horizontal)
-    float stopping_distance = -(V_initial_horizontal * V_initial_horizontal) / (2.0f * a_horizontal);
+    // 2ax = V_f^2 - V_i^2
+    // 2ax = 0 - V_i^2
+    // x = -V_i^2 / (2a)
+    float stopping_distance = -(V_i_horizontal * V_i_horizontal) / (2.0f * a_horizontal);
     
     return stopping_distance;
 }
 
 float Box::GetSlopeDistance(const Platform& platform) {
-    return platform.size.x; // doesnt actually work - just calculate by need
+    // Calculate the actual distance along the slope surface
+    Vector2 platform_direction = Vector2Subtract(platform.top_right, platform.top_left);
+    return Vector2Length(platform_direction);
+}
+
+float Box::GetDistanceAlongSlope(Vector2 start_point, Vector2 end_point, const Platform& slope_platform) {
+    // Project the start and end points onto the slope surface
+    Vector2 slope_direction = Vector2Normalize(Vector2Subtract(slope_platform.top_right, slope_platform.top_left));
+    
+    // Calculate the position along the slope for both points
+    Vector2 to_start = Vector2Subtract(start_point, slope_platform.top_left);
+    Vector2 to_end = Vector2Subtract(end_point, slope_platform.top_left);
+    
+    float start_t = Vector2DotProduct(to_start, slope_direction);
+    float end_t = Vector2DotProduct(to_end, slope_direction);
+    
+    // Return the distance along the slope
+    return abs(end_t - start_t);
 }
 
 Vector2 Box::CalculateStoppingPosition(const Platform& slope_platform, const Platform& horizontal_platform) {
@@ -354,6 +453,11 @@ Vector2 Box::CalculateStoppingPosition(const Platform& slope_platform, const Pla
 }
 
 void Box::SetPredictionStartPosition() {
+    // Only set prediction start if we haven't already set it
+    if (has_prediction_start) {
+        return;
+    }
+    
     // Calculate the bottom center of the rotated box
     float box_angle = rotation * DEG2RAD;
     float cos_rot = cosf(box_angle);
@@ -372,45 +476,114 @@ void Box::SetPredictionStartPosition() {
     multi_platform_ghost_calculated = false;
     ghost_calculated = false; // Reset ghost calculation
     std::cout << "Prediction start set at rotated bottom center: (" << prediction_start_position.x << ", " << prediction_start_position.y << ")" << std::endl;
+    std::cout << "Box position: (" << position.x << ", " << position.y << "), rotation: " << rotation << std::endl;
+}
+
+void Box::CalculateGhostTrajectory(const std::vector<Platform>& platforms) {
+    if (!has_prediction_start) {
+        std::cout << "CalculateGhostTrajectory: No prediction start position!" << std::endl;
+        return;
+    }
+    
+    // std::cout << "CalculateGhostTrajectory: Starting calculation..." << std::endl;
+    
+    // Find the current platform (slope) and the next platform (horizontal)
+    const Platform* slope_platform = nullptr;
+    const Platform* horizontal_platform = nullptr;
+    
+    // Find the platform we're currently on (should be a slope)
+    for (const auto& platform : platforms) {
+        if (IsPointOnPlatform(prediction_start_position, platform)) {
+            slope_platform = &platform;
+            // std::cout << "CalculateGhostTrajectory: Found slope platform with rotation: " << platform.rotation << std::endl;
+            break;
+        }
+    }
+    
+    if (!slope_platform) {
+        std::cout << "No slope platform found for ghost calculation!" << std::endl;
+        return;
+    }
+    
+    // Find the horizontal platform that connects to this slope
+    horizontal_platform = FindNextPlatformToRight(*slope_platform, platforms);
+    
+    if (!horizontal_platform) {
+        std::cout << "No horizontal platform found for ghost calculation!" << std::endl;
+        return;
+    }
+    
+    // std::cout << "CalculateGhostTrajectory: Found horizontal platform with rotation: " << horizontal_platform->rotation << std::endl;
+    
+    // Find the intersection point between slope and horizontal platforms
+    Vector2 intersect;
+    if (CheckCollisionLines(slope_platform->top_left, slope_platform->top_right, 
+                           horizontal_platform->top_left, horizontal_platform->top_right, &intersect)) {
+        transition_point_stored = intersect;
+        // std::cout << "CalculateGhostTrajectory: Found intersection at (" << intersect.x << ", " << intersect.y << ")" << std::endl;
+        
+        // Calculate the distance along the slope surface from prediction start to transition point
+        float slope_distance = GetDistanceAlongSlope(prediction_start_position, transition_point_stored, *slope_platform);
+        
+        // Use your equations to calculate the stopping distance on horizontal platform
+        float horizontal_stopping_distance = CalculateStoppingDistanceFromSlope(*slope_platform, slope_distance);
+        
+        // Calculate the direction along the horizontal platform
+        Vector2 horizontal_direction = Vector2Normalize(Vector2Subtract(horizontal_platform->top_right, horizontal_platform->top_left));
+        
+        // Calculate final ghost position
+        ghost_position_stored = Vector2Add(transition_point_stored, 
+                                         Vector2Scale(horizontal_direction, horizontal_stopping_distance));
+        
+        ghost_calculated = true;
+        
+        std::cout << "Ghost calculated - slope: " << slope_distance 
+                  << ", horizontal: " << horizontal_stopping_distance 
+                  << ", final: (" << ghost_position_stored.x << ", " << ghost_position_stored.y << ")" << std::endl;
+        
+        // Validate the calculation
+        if (horizontal_stopping_distance < 0 || horizontal_stopping_distance > 10000) {
+            std::cout << "WARNING: Invalid horizontal stopping distance: " << horizontal_stopping_distance << std::endl;
+        }
+    } else {
+        // If no direct intersection, find the closest connection point for left-to-right movement
+        Vector2 current_right = GetRightEndOfPlatform(*slope_platform);
+        Vector2 next_left = (horizontal_platform->top_left.x < horizontal_platform->top_right.x) ? 
+                           horizontal_platform->top_left : horizontal_platform->top_right;
+        
+        // For left-to-right movement, use the right end of slope as transition point
+        // This ensures the box transitions at the actual end of the slope platform
+        transition_point_stored = current_right;
+        
+        // Calculate the distance along the slope surface from prediction start to transition point
+        float slope_distance = GetDistanceAlongSlope(prediction_start_position, transition_point_stored, *slope_platform);
+        
+        // Use your equations to calculate the stopping distance on horizontal platform
+        float horizontal_stopping_distance = CalculateStoppingDistanceFromSlope(*slope_platform, slope_distance);
+        
+        // Calculate the direction along the horizontal platform
+        Vector2 horizontal_direction = Vector2Normalize(Vector2Subtract(horizontal_platform->top_right, horizontal_platform->top_left));
+        
+        // Calculate final ghost position
+        ghost_position_stored = Vector2Add(transition_point_stored, 
+                                         Vector2Scale(horizontal_direction, horizontal_stopping_distance));
+        
+        ghost_calculated = true;
+        
+        std::cout << "Ghost calculated (no intersection) - slope: " << slope_distance 
+                  << ", horizontal: " << horizontal_stopping_distance 
+                  << ", final: (" << ghost_position_stored.x << ", " << ghost_position_stored.y << ")" << std::endl;
+    }
 }
 
 void Box::DrawGhost(const Platform& slope_platform, const Platform& horizontal_platform) {
-    if (!has_prediction_start) {
-        return; // No prediction start position set yet
+    if (!has_prediction_start || !ghost_calculated) {
+        std::cout << "DrawGhost: Not drawing - has_prediction_start: " << has_prediction_start 
+                  << ", ghost_calculated: " << ghost_calculated << std::endl;
+        return; // No prediction start position set yet or ghost not calculated
     }
     
-    if (!ghost_calculated) {
-        // Calculate once from the fixed starting position
-        Vector2 slope_line_start = slope_platform.top_left;
-        Vector2 slope_line_end = slope_platform.top_right;
-        Vector2 hori_line_start = horizontal_platform.top_left;
-        Vector2 hori_line_end = horizontal_platform.top_right;
-        Vector2 intersect;
-
-        if (CheckCollisionLines(slope_line_start, slope_line_end, hori_line_start, hori_line_end, &intersect)) {
-            transition_point_stored = intersect;
-            
-            // Use FIXED starting position for calculation
-            float slope_distance = Vector2Distance(prediction_start_position, transition_point_stored);
-            float horizontal_stopping_distance = CalculateStoppingDistanceFromSlope(slope_platform, slope_distance);
-            
-            Vector2 horizontal_direction = {1.0f, 0.0f};
-            if (slope_platform.rotation > 0) {
-                horizontal_direction.x = 1.0f;
-            } else {
-                horizontal_direction.x = -1.0f;
-            }
-            
-            ghost_position_stored = Vector2Add(transition_point_stored, 
-                                             Vector2Scale(horizontal_direction, horizontal_stopping_distance));
-            ghost_calculated = true;
-            
-            std::cout << "Ghost calculated - slope distance: " << slope_distance << ", horizontal distance: " << horizontal_stopping_distance << std::endl;
-        } else {
-            std::cout << "No intersection found between slope and horizontal platform." << std::endl;
-            return;
-        }
-    }
+    // std::cout << "DrawGhost: Drawing ghost at (" << ghost_position_stored.x << ", " << ghost_position_stored.y << ")" << std::endl;
     
     // Draw debug lines
     DrawLineEx(slope_platform.top_left, slope_platform.top_right, 2.0f, RED);
@@ -442,8 +615,8 @@ void Box::DrawGhost(const Platform& slope_platform, const Platform& horizontal_p
     
     // Show debug info
     Vector2 text_pos = {ghost_position_stored.x - 50, ghost_position_stored.y - 40};
-    float slope_distance = Vector2Distance(prediction_start_position, transition_point_stored);
-    DrawText(TextFormat("Start->Trans: %.1f", slope_distance), text_pos.x, text_pos.y, 14, ORANGE);
+    float slope_distance = GetSlopeDistance(slope_platform);
+    DrawText(TextFormat("Slope dist: %.1f", slope_distance), text_pos.x, text_pos.y, 14, ORANGE);
 }
 
 void Box::DrawMultiPlatformGhost(const std::vector<Platform>& platforms) {
@@ -675,7 +848,7 @@ void Box::DrawTwoLineCollisionDebug(const std::vector<Platform>& platforms) {
 
 bool Box::IsPointOnPlatform(Vector2 point, const Platform& platform) {
     // Check if point is close to the platform's top surface
-    float tolerance = 10.0f;
+    float tolerance = 25.0f; // Increased tolerance for better detection
     
     // Get platform top line
     Vector2 line_start = platform.top_left;
@@ -832,13 +1005,21 @@ Vector2 Box::GetRightEndOfPlatform(const Platform& platform) {
 }
 
 const Platform* Box::FindNextPlatformToRight(const Platform& current_platform, const std::vector<Platform>& platforms) {
-    float tolerance = 30.0f;
+    float tolerance = 50.0f; // Increased tolerance for better platform finding
     const Platform* best_platform = nullptr;
     float min_distance = std::numeric_limits<float>::max();
     Vector2 current_right_end = GetRightEndOfPlatform(current_platform);
     
     for (const auto& platform : platforms) {
         if (&platform == &current_platform) continue;
+        
+        // Check for direct intersection first
+        Vector2 intersection;
+        if (CheckCollisionLines(current_platform.top_left, current_platform.top_right,
+                               platform.top_left, platform.top_right, &intersection)) {
+            // Direct intersection found - this is definitely connected
+            return &platform;
+        }
         
         // Only consider platforms that are to the right and close
         Vector2 platform_left_end = (platform.top_left.x < platform.top_right.x) ? platform.top_left : platform.top_right;

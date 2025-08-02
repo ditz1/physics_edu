@@ -132,8 +132,8 @@ int main(int argc, char* argv[]) {
         float plat_rotation = 40.0f;
         Platform platform2 = {plat_center_2, plat_size_2, plat_rotation};
         
-        //all_platforms.push_back(platform);
-        //all_platforms.push_back(platform2);
+        all_platforms.push_back(platform);
+        all_platforms.push_back(platform2);
     }
 
 
@@ -148,7 +148,7 @@ int main(int argc, char* argv[]) {
     Platform spring_platform = {spring.position, { 200.0f, 50.0f }, 0.0f };
     spring_platform.position = spring.position;
 
-    float dt = 1.0f / 30.0f; // Fixed time step for 60 FPS
+    float dt = 1.0f / 60.0f; // Fixed time step for 60 FPS
 
     std::vector<Vector2> spring_path;
     spring_path.push_back(spring.position);
@@ -221,7 +221,16 @@ int main(int argc, char* argv[]) {
 
         // Check if box was just released
         if (was_grabbed_last_frame && !box.is_grabbed) {
-            box.SetPredictionStartPosition();
+            // Reset ghost calculation when box is released
+            box.ghost_calculated = false;
+            box.multi_platform_ghost_calculated = false;
+            box.has_prediction_start = false;
+            
+            // If box is already on a platform when released, set prediction start immediately
+            if (box.is_colliding) {
+                box.SetPredictionStartPosition();
+                box.CalculateGhostTrajectory(all_platforms);
+            }
         }
 
         spring2.CheckGrab();
@@ -294,10 +303,14 @@ int main(int argc, char* argv[]) {
             spring.Update(dt);
             spring2.Update(dt);
 
-            box.Update(dt);
+            // Check collision BEFORE physics update to prevent box from moving into platform
             box.was_colliding_last_frame = box.is_colliding; // store collision state for next frame
             box.last_platform_id = box.current_platform_id; // store last platform ID for next frame
-            box.CheckCollision();
+            
+            // Use the new two-line collision system BEFORE physics update
+            box.CheckPlatformCollisionTwoLine(all_platforms);
+            
+            box.Update(dt, all_platforms);
             //platform.Update(dt);
             spring_path.push_back(spring.position);
 
@@ -316,9 +329,6 @@ int main(int argc, char* argv[]) {
 
         bool wasColliding = box.is_colliding;
         box.is_colliding = false;
-
-        // Use the new two-line collision system instead of SAT
-        box.CheckPlatformCollisionTwoLine(all_platforms);
 
         if (IsKeyDown(KEY_UP)) {
             ball_and_string.angularSpeed += 0.01f;
@@ -362,8 +372,35 @@ int main(int argc, char* argv[]) {
             //    box.color = RED;
             //}
             
-            if (wasColliding) {
-                box.DrawMultiPlatformGhost(all_platforms);
+            // Debug ghost calculation status
+            if (box.has_prediction_start) {
+                DrawText(TextFormat("Ghost calculated: %s", box.ghost_calculated ? "YES" : "NO"), 10, 100, 20, RAYWHITE);
+                DrawText(TextFormat("Was colliding: %s", wasColliding ? "YES" : "NO"), 10, 130, 20, RAYWHITE);
+            }
+            
+            if (box.ghost_calculated) {
+                // Find the slope and horizontal platforms for ghost drawing
+                const Platform* slope_platform = nullptr;
+                const Platform* horizontal_platform = nullptr;
+                
+                // Find the platform we're currently on (should be a slope)
+                for (const auto& platform : all_platforms) {
+                    if (box.IsPointOnPlatform(box.prediction_start_position, platform)) {
+                        slope_platform = &platform;
+                        break;
+                    }
+                }
+                
+                // Find the horizontal platform that connects to this slope
+                if (slope_platform) {
+                    horizontal_platform = box.FindNextPlatformToRight(*slope_platform, all_platforms);
+                }
+                
+                if (slope_platform && horizontal_platform) {
+                    box.DrawGhost(*slope_platform, *horizontal_platform);
+                } else {
+                    DrawText("Ghost platforms not found!", 10, 160, 20, RED);
+                }
             }
 
             Rectangle box_rect = { screenWidth - 200, 480, 100, 100 };
