@@ -1,4 +1,5 @@
 #include <box.hpp>
+#include "collision_utils.hpp"
 #include <iostream>
 #include <algorithm>
 #include <limits>
@@ -19,17 +20,20 @@ void Box::Update(float dt) {
     // if box was not colliding last frame but it is colliding this frame, we need to reset the velocity
 
     if (!was_colliding_last_frame && is_colliding) {
-        //velocity = {0.0f, 0.0f};
-        acceleration.y = 9.81f;
+        // Reset acceleration when starting to collide
+        acceleration = {0.0f, 0.0f};
     }
 
     if (!is_colliding) {
-        ApplyGravity(dt);
+        // Apply normal gravity when not colliding
+        acceleration.y += gravity * dt; // Accumulate gravity acceleration
+        velocity = Vector2Add(velocity, Vector2Scale(acceleration, dt));
     } else {
+        // Apply gravity along slope when colliding
         float slope_angle = rotation * DEG2RAD;
         float gravity_along_slope = gravity * sin(slope_angle);
         
-        // Calculate slope direction (assuming rotation is the platform angle)
+        // Calculate slope direction (direction along the slope surface)
         Vector2 slope_direction = { cos(slope_angle), sin(slope_angle) };
         
         // Apply acceleration along slope
@@ -54,14 +58,14 @@ void Box::Draw() {
         BLACK
     );
     
-    // DrawRectanglePro(
-    //     (Rectangle){ position.x, position.y, size.x - border * 2, size.y - border * 2 }, 
-    //     (Vector2){ (size.x - border * 2) * 0.5f, (size.y - border * 2) * 0.5f }, // origin at center of smaller rect
-    //     rotation, 
-    //     color
-    // );
+    DrawRectanglePro(
+        (Rectangle){ position.x, position.y, size.x - border * 2, size.y - border * 2 }, 
+        (Vector2){ (size.x - border * 2) * 0.5f, (size.y - border * 2) * 0.5f }, // origin at center of smaller rect
+        rotation, 
+        color
+    );
 
-    DrawTextureEx(*texture, { position.x - size.x, position.y - size.y }, rotation, 0.08f, WHITE);
+    //DrawTextureEx(*texture, { position.x - size.x, position.y - size.y }, rotation, 0.08f, WHITE);
     
     
     // Draw a circle at the position for reference
@@ -167,6 +171,94 @@ void Box::CheckPlatformCollisionSAT(const Platform& platform, int platform_id) {
         }
         
         //std::cout << "transition from platform " << last_platform_id << " to " << platform_id << " | " << velocity.x << std::endl;
+    }
+}
+
+void Box::CheckPlatformCollisionTwoLine(const std::vector<Platform>& platforms) {
+    // Get the two vertical lines from the box's bottom corners
+    std::vector<LineSegment> lines = CollisionUtils::GetBoxBottomLines(position, size, rotation);
+    
+    // Check collision with all platforms using the two-line system
+    TwoLineCollisionInfo collisionInfo = CollisionUtils::CheckTwoLineCollision(lines, platforms);
+    
+    // Debug output
+    if (collisionInfo.hasCollision) {
+        std::cout << "Collision detected! Distance: " << collisionInfo.distanceToPlatform 
+                  << ", Platform ID: " << collisionInfo.platformId << std::endl;
+    }
+    
+    if (collisionInfo.hasCollision) {
+        bool isNewCollision = !was_colliding_last_frame;
+        bool isPlatformTransition = (was_colliding_last_frame && last_platform_id != collisionInfo.platformId);
+        
+        // Store old velocity for platform transitions
+        Vector2 old_velocity = velocity;
+        float old_speed = Vector2Length(velocity);
+        
+        is_colliding = true;
+        current_platform_id = collisionInfo.platformId;
+        int old_rotation = rotation; // Store old rotation for debugging
+        
+        // Get the platform we're colliding with
+        const Platform& platform = platforms[collisionInfo.platformId];
+        rotation = platform.rotation;
+        
+        // Move box to sit on the platform
+        // Calculate the box's bottom center point
+        Vector2 boxBottomCenter = {
+            position.x,
+            position.y + size.y * 0.5f
+        };
+        
+        // Find the closest point on the platform surface to the box bottom center
+        Vector2 platformDir = Vector2Subtract(platform.top_right, platform.top_left);
+        Vector2 toBox = Vector2Subtract(boxBottomCenter, platform.top_left);
+        float platformLength = Vector2Length(platformDir);
+        
+        if (platformLength > 0) {
+            Vector2 normalizedDir = Vector2Normalize(platformDir);
+            float t = Vector2DotProduct(toBox, normalizedDir) / platformLength;
+            t = fmax(0.0f, fmin(1.0f, t)); // Clamp to platform bounds
+            
+            // Calculate the closest point on the platform surface
+            Vector2 closestPoint = Vector2Add(platform.top_left, Vector2Scale(normalizedDir, t * platformLength));
+            
+            // Calculate the distance from box bottom to platform surface
+            float distanceToMove = boxBottomCenter.y - closestPoint.y;
+            
+            if (distanceToMove > 0) {
+                position.y -= distanceToMove;
+            }
+        }
+        
+        // Handle velocity during platform transitions
+        if (isPlatformTransition) {
+            // Convert velocity to the new platform's coordinate system
+            float new_slope_angle = platform.rotation * DEG2RAD;
+            Vector2 new_slope_direction = {cos(new_slope_angle), sin(new_slope_angle)};
+            
+            // Project the old velocity onto the new slope direction
+            float velocity_along_new_slope = Vector2DotProduct(old_velocity, new_slope_direction);
+            std::cout << "old rotation: " << old_rotation << " | new rotation: " << rotation << std::endl;
+            
+            // If we're transitioning to a flatter surface, convert some y-velocity to x-velocity
+            if (abs(rotation) < abs(old_rotation)) { // New platform is flatter
+                std::cout << "transitioning to flatter surface" << std::endl;
+                velocity = Vector2Scale(new_slope_direction, old_speed * 1.0f);
+            } else {
+                // Normal velocity projection for other transitions
+                velocity = Vector2Scale(new_slope_direction, velocity_along_new_slope);
+            }
+        } else if (isNewCollision) {
+            // Only remove velocity component for brand NEW collisions
+            float velocityDotNormal = Vector2DotProduct(velocity, collisionInfo.normal);
+            if (velocityDotNormal < 0) {
+                Vector2 velocityAlongNormal = Vector2Scale(collisionInfo.normal, velocityDotNormal);
+                velocity = Vector2Subtract(velocity, velocityAlongNormal);
+            }
+        }
+    } else {
+        is_colliding = false;
     }
 }
 
@@ -552,6 +644,40 @@ const Platform* Box::FindNextConnectedPlatform(const Platform& current_platform,
     }
     
     return best_platform;
+}
+
+void Box::DrawTwoLineCollisionDebug(const std::vector<Platform>& platforms) {
+    // Get the two vertical lines from the box's bottom corners
+    std::vector<LineSegment> lines = CollisionUtils::GetBoxBottomLines(position, size, rotation);
+    
+    // Check collision first to get the collision points
+    TwoLineCollisionInfo collisionInfo = CollisionUtils::CheckTwoLineCollision(lines, platforms);
+    
+    // Draw the two lines, but only to the platform surface if colliding
+    for (size_t i = 0; i < lines.size(); i++) {
+        Color lineColor = (i == 0) ? RED : BLUE;
+        
+        if (collisionInfo.hasCollision) {
+            // Draw line from box corner to platform surface
+            DrawLineEx(lines[i].start, collisionInfo.collisionPoint, 2.0f, lineColor);
+        } else {
+            // Draw full line when not colliding
+            DrawLineEx(lines[i].start, lines[i].end, 2.0f, lineColor);
+        }
+        
+        // Draw a small circle at the start of each line
+        DrawCircleV(lines[i].start, 3.0f, lineColor);
+    }
+    
+    if (collisionInfo.hasCollision) {
+        // Draw collision point
+        DrawCircleV(collisionInfo.collisionPoint, 5.0f, GREEN);
+        
+        // Draw distance text
+        Vector2 textPos = {collisionInfo.collisionPoint.x + 10, collisionInfo.collisionPoint.y - 10};
+        DrawText(TextFormat("Dist: %.2f", collisionInfo.distanceToPlatform), textPos.x, textPos.y, 14, WHITE);
+        DrawText(TextFormat("Platform: %d", collisionInfo.platformId), textPos.x, textPos.y + 15, 14, WHITE);
+    }
 }
 
 bool Box::IsPointOnPlatform(Vector2 point, const Platform& platform) {

@@ -148,7 +148,7 @@ int main(int argc, char* argv[]) {
     Platform spring_platform = {spring.position, { 200.0f, 50.0f }, 0.0f };
     spring_platform.position = spring.position;
 
-    float dt = 1.0f / 30.0f; // assume fixed time step, but if 60fps its will be this anyway
+    float dt = 1.0f / 60.0f; // Fixed time step for 60 FPS
 
     std::vector<Vector2> spring_path;
     spring_path.push_back(spring.position);
@@ -182,15 +182,15 @@ int main(int argc, char* argv[]) {
     BallAndString ball_and_string = BallAndString({ screenWidth / 2.0f, screenHeight / 2.0f }, 200.0f, 0.0f);
     ball_and_string.path.push_back(ball_and_string.position);
     
-    all_platforms.push_back(spring_platform);
-    Platform& spring_platform_ref = all_platforms.back();
+    //all_platforms.push_back(spring_platform);
+    //Platform& spring_platform_ref = all_platforms.back();
 
   
 
     while (!WindowShouldClose()) {
 
 
-        spring_platform_ref.position = spring.position;
+        //spring_platform_ref.position = spring.position;
         
 
         
@@ -315,11 +315,8 @@ int main(int argc, char* argv[]) {
         bool wasColliding = box.is_colliding;
         box.is_colliding = false;
 
-        for (size_t i = 0; i < all_platforms.size(); i++) {
-            if (!box.is_colliding) {
-                box.CheckPlatformCollisionSAT(all_platforms[i], i);
-            }
-        }
+        // Use the new two-line collision system instead of SAT
+        box.CheckPlatformCollisionTwoLine(all_platforms);
 
         if (IsKeyDown(KEY_UP)) {
             ball_and_string.angularSpeed += 0.01f;
@@ -370,7 +367,7 @@ int main(int argc, char* argv[]) {
             Rectangle box_rect = { screenWidth - 200, 480, 100, 100 };
             // platform.Draw();
             // platform2.Draw();
-            spring.Draw();
+            //spring.Draw();
             for (Platform& plat : all_platforms) {
                 plat.Draw();
             }
@@ -378,6 +375,9 @@ int main(int argc, char* argv[]) {
             DrawRectangleLinesEx(box_rect, 1.0f, GREEN);
             box.Draw();
             box.DrawVectors();
+            
+            // Draw debug visualization of the two-line collision system
+            box.DrawTwoLineCollisionDebug(all_platforms);
             DrawTextureEx(gorilla_tex, {box_rect.x, box_rect.y}, 0.0f, 0.125f, WHITE);
 
             if (CheckCollisionRecs(box_rect, box.Rect())){

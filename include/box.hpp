@@ -41,7 +41,8 @@ public:
     void Update(float dt) override;
     void Draw() override;
     void CheckCollision();
-    void CheckPlatformCollisionSAT(const Platform& platform, int platform_id);    
+    void CheckPlatformCollisionSAT(const Platform& platform, int platform_id);
+    void CheckPlatformCollisionTwoLine(const std::vector<Platform>& platforms);
     void ApplyFriction(float dt);
     void SetPredictionStartPosition();
     bool IsPointOnPlatform(Vector2 point, const Platform& platform);
@@ -61,6 +62,7 @@ public:
     void DrawGhost(const Platform& slope_platform, const Platform& horizontal_platform);
     void DrawMultiPlatformGhost(const std::vector<Platform>& platforms);
     void CalculateMultiPlatformTrajectory(const std::vector<Platform>& platforms);
+    void DrawTwoLineCollisionDebug(const std::vector<Platform>& platforms);
 
     Rectangle inline Rect() const {
         return (Rectangle){ position.x, position.y, size.x, size.y };
