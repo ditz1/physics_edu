@@ -42,8 +42,9 @@ public:
     void Update(float dt, const std::vector<Platform>& platforms = {});
     void Draw() override;
     void CheckCollision();
-    void CheckPlatformCollisionSAT(const Platform& platform, int platform_id);
+    // REMOVED: CheckPlatformCollisionSAT - now using only TwoLine collision detection
     void CheckPlatformCollisionTwoLine(const std::vector<Platform>& platforms);
+    bool CheckAndHandleTransition(const std::vector<Platform>& platforms);
     void ApplyFriction(float dt);
     void SetPredictionStartPosition();
     void CalculateGhostTrajectory(const std::vector<Platform>& platforms);

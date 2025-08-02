@@ -327,9 +327,6 @@ int main(int argc, char* argv[]) {
             plat.Draw();
         }
 
-        bool wasColliding = box.is_colliding;
-        box.is_colliding = false;
-
         if (IsKeyDown(KEY_UP)) {
             ball_and_string.angularSpeed += 0.01f;
         } else if (IsKeyDown(KEY_DOWN)) {
@@ -375,7 +372,7 @@ int main(int argc, char* argv[]) {
             // Debug ghost calculation status
             if (box.has_prediction_start) {
                 DrawText(TextFormat("Ghost calculated: %s", box.ghost_calculated ? "YES" : "NO"), 10, 100, 20, RAYWHITE);
-                DrawText(TextFormat("Was colliding: %s", wasColliding ? "YES" : "NO"), 10, 130, 20, RAYWHITE);
+                DrawText(TextFormat("Is colliding: %s", box.is_colliding ? "YES" : "NO"), 10, 130, 20, RAYWHITE);
             }
             
             if (box.ghost_calculated) {
