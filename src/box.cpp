@@ -16,11 +16,11 @@ Box::~Box() {
 }
 
 void Box::Update(float dt) {
-    // p1 = p0 + v * dt
-    // if box was not colliding last frame but it is colliding this frame, we need to reset the velocity
-
+    // Store the previous collision state
+    was_colliding_last_frame = is_colliding;
+    
+    // Only reset acceleration when transitioning from not colliding to colliding
     if (!was_colliding_last_frame && is_colliding) {
-        // Reset acceleration when starting to collide
         acceleration = {0.0f, 0.0f};
     }
 
@@ -68,7 +68,6 @@ void Box::Draw() {
     //DrawTextureEx(*texture, { position.x - size.x, position.y - size.y }, rotation, 0.08f, WHITE);
     
     
-    // Draw a circle at the position for reference
     DrawCircleV(position, 5, WHITE);
 }
 
@@ -86,14 +85,6 @@ void Box::CheckCollision() {
         position.y = (position.y < 0.0f) ? 0.0f : s_height - size.y; // reset position to screen bounds
     } 
 
-    // if (velocity.y < 0.1f && velocity.y > -0.1f) {
-    //     velocity.y = 0.0f; 
-    //     acceleration.y = 0.0f; 
-    // }
-    // if (velocity.x < 0.1f && velocity.x > -0.1f) {
-    //     velocity.x = 0.0f; 
-    //     acceleration.x = 0.0f; 
-    // }
 }
 
 void Box::CheckPlatformCollision(Rectangle platform_rect) {
@@ -203,31 +194,33 @@ void Box::CheckPlatformCollisionTwoLine(const std::vector<Platform>& platforms) 
         const Platform& platform = platforms[collisionInfo.platformId];
         rotation = platform.rotation;
         
-        // Move box to sit on the platform
-        // Calculate the box's bottom center point
-        Vector2 boxBottomCenter = {
-            position.x,
-            position.y + size.y * 0.5f
-        };
-        
-        // Find the closest point on the platform surface to the box bottom center
-        Vector2 platformDir = Vector2Subtract(platform.top_right, platform.top_left);
-        Vector2 toBox = Vector2Subtract(boxBottomCenter, platform.top_left);
-        float platformLength = Vector2Length(platformDir);
-        
-        if (platformLength > 0) {
-            Vector2 normalizedDir = Vector2Normalize(platformDir);
-            float t = Vector2DotProduct(toBox, normalizedDir) / platformLength;
-            t = fmax(0.0f, fmin(1.0f, t)); // Clamp to platform bounds
+        // Only reposition the box if it's a new collision or if the distance is significant
+        if (isNewCollision || collisionInfo.distanceToPlatform > 1.0f) {
+            // Calculate the box's bottom center point
+            Vector2 boxBottomCenter = {
+                position.x,
+                position.y + size.y * 0.5f
+            };
             
-            // Calculate the closest point on the platform surface
-            Vector2 closestPoint = Vector2Add(platform.top_left, Vector2Scale(normalizedDir, t * platformLength));
+            // Find the closest point on the platform surface to the box bottom center
+            Vector2 platformDir = Vector2Subtract(platform.top_right, platform.top_left);
+            Vector2 toBox = Vector2Subtract(boxBottomCenter, platform.top_left);
+            float platformLength = Vector2Length(platformDir);
             
-            // Calculate the distance from box bottom to platform surface
-            float distanceToMove = boxBottomCenter.y - closestPoint.y;
-            
-            if (distanceToMove > 0) {
-                position.y -= distanceToMove;
+            if (platformLength > 0) {
+                Vector2 normalizedDir = Vector2Normalize(platformDir);
+                float t = Vector2DotProduct(toBox, normalizedDir) / platformLength;
+                t = fmax(0.0f, fmin(1.0f, t)); // Clamp to platform bounds
+                
+                // Calculate the closest point on the platform surface
+                Vector2 closestPoint = Vector2Add(platform.top_left, Vector2Scale(normalizedDir, t * platformLength));
+                
+                // Calculate the distance from box bottom to platform surface
+                float distanceToMove = boxBottomCenter.y - closestPoint.y;
+                
+                if (distanceToMove > 0) {
+                    position.y -= distanceToMove;
+                }
             }
         }
         

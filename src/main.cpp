@@ -148,7 +148,7 @@ int main(int argc, char* argv[]) {
     Platform spring_platform = {spring.position, { 200.0f, 50.0f }, 0.0f };
     spring_platform.position = spring.position;
 
-    float dt = 1.0f / 60.0f; // Fixed time step for 60 FPS
+    float dt = 1.0f / 30.0f; // Fixed time step for 60 FPS
 
     std::vector<Vector2> spring_path;
     spring_path.push_back(spring.position);
@@ -214,6 +214,8 @@ int main(int argc, char* argv[]) {
         if (box.is_grabbed) {
             Vector2 mouse_position = GetMousePosition();
             box.Grab(mouse_position);
+            box.velocity = { 0.0f, 0.0f };
+            box.acceleration = { 0.0f, 0.0f };
             box.ghost_calculated = false; // reset ghost calculation when grabbed
         }
 
@@ -354,11 +356,11 @@ int main(int argc, char* argv[]) {
             // }
 
             // Set color based on collision state
-            if (wasColliding){
-                box.color = PINK;
-            } else {
-                box.color = RED;
-            }
+            //if (wasColliding){
+            //    box.color = PINK;
+            //} else {
+            //    box.color = RED;
+            //}
             
             if (wasColliding) {
                 box.DrawMultiPlatformGhost(all_platforms);
