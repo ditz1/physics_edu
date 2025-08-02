@@ -114,6 +114,9 @@ int main(int argc, char* argv[]) {
         if (strcmp(argv[i], "-f") == 0 && i + 1 < argc) {
             // Load configuration from specified file
             LoadPlatformConfigurationFromFile(argv[i + 1], all_platforms);
+            for (int i = 0; i < all_platforms.size(); i++) {
+                all_platforms[i].id = i;
+            }
             config_loaded = true;
             std::cout << "Loaded platform configuration from: " << argv[i + 1] << std::endl;
             break;
@@ -137,76 +140,28 @@ int main(int argc, char* argv[]) {
     }
 
 
-    Spring spring;
-    spring.anchor = { 500.0f, 500.0f };
-    spring.position = { 500.0f, 750.0f };
-    // make it spawn to left so it falls down
-    spring.mass = 2.0f;
-    spring.spring_constant = 5.0f;
-    spring.damping_factor = 0.3f;
-    spring.rest_length = 250.0f;
-    Platform spring_platform = {spring.position, { 200.0f, 50.0f }, 0.0f };
-    spring_platform.position = spring.position;
 
-    float dt = 1.0f / 60.0f; // Fixed time step for 60 FPS
+    float dt = 1.0f / 30.0f; // Fixed time step for 60 FPS
 
-    std::vector<Vector2> spring_path;
-    spring_path.push_back(spring.position);
-
-    Spring spring2;
-    spring2.anchor = spring.position;
-    spring2.position = { screenWidth / 2.0f, screenHeight / 2.0f + 100.0f };
-    spring2.mass = 2.0f;
-    spring2.spring_constant = 5.0f;
-    spring2.damping_factor = 0.05f;
-    spring2.rest_length = 100.0f;
 
     Box box = Box(50, 50);
     box.position = { 75.0f, screenHeight / 2.0f - 200.0f };
     box.mass = 100.0f;
-    box.texture = &bananas_tex; 
+    box.texture = &bananas_tex;
+    box.ghost_calculated = false;
 
 
     Toolbox toolbox;
     bool toolbox_active = true;
 
-    std::vector<Star> stars;
-    for (int i = 0; i < 10; i++) {
-        Star star;
-        star.position = { (float)GetRandomValue(0, screenWidth), (float)GetRandomValue(0, screenHeight) };
-        stars.push_back(star);
-    }
-    int points = 0;
+  
     float box_force = 50.0f;
 
-    BallAndString ball_and_string = BallAndString({ screenWidth / 2.0f, screenHeight / 2.0f }, 200.0f, 0.0f);
-    ball_and_string.path.push_back(ball_and_string.position);
     
-    //all_platforms.push_back(spring_platform);
-    //Platform& spring_platform_ref = all_platforms.back();
 
   
 
     while (!WindowShouldClose()) {
-
-
-        //spring_platform_ref.position = spring.position;
-        
-
-        
-        ball_and_string.Update(dt);
-        if (Vector2Distance(ball_and_string.path.back(), ball_and_string.position) > 5.0f) {
-            // only add to path if the position has changed significantly
-            ball_and_string.path.push_back(ball_and_string.position);
-        }
-
-        
-
-        spring.CheckGrab();
-        if (spring.is_grabbed) {
-            Vector2 mouse_position = GetMousePosition();
-            spring.Grab(mouse_position);
-        }
 
 
         bool was_grabbed_last_frame = box.is_grabbed;
@@ -233,12 +188,6 @@ int main(int argc, char* argv[]) {
             }
         }
 
-        spring2.CheckGrab();
-        if (spring2.is_grabbed) {
-            Vector2 mouse_position = GetMousePosition();
-            spring2.Grab(mouse_position);
-        }
-
 
         for (Platform& platform : all_platforms) {
             platform.CheckGrab();
@@ -258,21 +207,12 @@ int main(int argc, char* argv[]) {
             }
         }
 
-        
-
-        points = 0;
-        for (Star& s : stars){
-            s.CheckCollision(spring);
-            if (s.is_grabbed) {
-                points++;
-            }
-        }
+  
 
 
         if (IsKeyPressed(KEY_TAB)){
             toolbox_active = !toolbox_active;
         }
-        
 
         if (IsKeyPressed(KEY_LEFT)){
             box_force -= 1.0f;
@@ -298,11 +238,7 @@ int main(int argc, char* argv[]) {
         // UPDATE LOGIC //
         //////////////////
         if (!edit_mode) {
-            spring2.anchor = spring.position;   
-
-            spring.Update(dt);
-            spring2.Update(dt);
-
+          
             // Check collision BEFORE physics update to prevent box from moving into platform
             box.was_colliding_last_frame = box.is_colliding; // store collision state for next frame
             box.last_platform_id = box.current_platform_id; // store last platform ID for next frame
@@ -312,9 +248,6 @@ int main(int argc, char* argv[]) {
             
             box.Update(dt, all_platforms);
             //platform.Update(dt);
-            spring_path.push_back(spring.position);
-
-            ball_and_string.Update(dt);
         }
 
       
@@ -327,23 +260,7 @@ int main(int argc, char* argv[]) {
             plat.Draw();
         }
 
-        if (IsKeyDown(KEY_UP)) {
-            ball_and_string.angularSpeed += 0.01f;
-        } else if (IsKeyDown(KEY_DOWN)) {
-            ball_and_string.angularSpeed -= 0.01f;
-        }
 
-        if (IsKeyPressed(KEY_SPACE)){
-            ball_and_string.Break();
-        }
-
-        if (IsKeyPressed(KEY_R)) {
-            ball_and_string.Reset();
-        }
-
-        if (ball_and_string.path.size() > 30){
-            ball_and_string.path.erase(ball_and_string.path.begin());
-        }
 
         BeginDrawing();
             ClearBackground(DARKGRAY);
@@ -425,16 +342,8 @@ int main(int argc, char* argv[]) {
              DrawText(TextFormat("Box Friction (mu_f): %.2f", box.mu_kinetic), 10, 70, 20, RAYWHITE);
             DrawFPS(10, 10);
 
-            ///////////////
-            // SCENE 3////
-            ///////////////
-
-            // ball_and_string.Draw();
-            // ball_and_string.DrawVectors();
-            // DrawText(TextFormat("Angular Speed: %.2f", ball_and_string.angularSpeed), 10, 10, 20, RAYWHITE);
-            // for (size_t i = 0; i < ball_and_string.path.size(); i++) {
-            //     DrawCircleV(ball_and_string.path[i], 2.0f, GREEN);
-            // }
+   
+      
 
             if (edit_mode) {
                 DrawText("EDIT MODE", screenWidth - 140, screenHeight - 40, 20, RED);
@@ -445,9 +354,7 @@ int main(int argc, char* argv[]) {
             }
         EndDrawing();
 
-        if (spring_path.size() > 100){
-            spring_path.erase(spring_path.begin());
-        }
+        
     }
 
     UnloadTexture(gorilla_tex);

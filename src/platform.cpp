@@ -85,6 +85,6 @@ void Platform::Draw() {
     
     if (edit_mode){
         DrawCircleV(position, 20.0f, RED);
-        DrawText(TextFormat("%.2f deg", rotation), position.x + 25, position.y - 10, 20, BLACK);
+        DrawText(TextFormat("%.2f deg [%d]", rotation, id), position.x + 25, position.y - 10, 20, BLACK);
     }
 }

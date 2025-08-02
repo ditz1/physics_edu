@@ -17,6 +17,7 @@ public:
     bool is_selected = false;
     Vector2 top_left; // after rotated
     Vector2 top_right; // after rotated
+    int id = 0;
 
     void Draw() override;
     void Update(float dt) override {}
