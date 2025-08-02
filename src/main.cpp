@@ -182,15 +182,15 @@ int main(int argc, char* argv[]) {
     BallAndString ball_and_string = BallAndString({ screenWidth / 2.0f, screenHeight / 2.0f }, 200.0f, 0.0f);
     ball_and_string.path.push_back(ball_and_string.position);
     
-    //all_platforms.push_back(spring_platform);
-    //Platform& spring_platform_ref = all_platforms.back();
+    all_platforms.push_back(spring_platform);
+    Platform& spring_platform_ref = all_platforms.back();
 
   
 
     while (!WindowShouldClose()) {
 
 
-        //spring_platform_ref.position = spring.position;
+        spring_platform_ref.position = spring.position;
         
 
         
@@ -370,7 +370,7 @@ int main(int argc, char* argv[]) {
             Rectangle box_rect = { screenWidth - 200, 480, 100, 100 };
             // platform.Draw();
             // platform2.Draw();
-            //spring.Draw();
+            spring.Draw();
             for (Platform& plat : all_platforms) {
                 plat.Draw();
             }
