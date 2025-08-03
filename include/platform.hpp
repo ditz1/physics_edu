@@ -18,11 +18,19 @@ public:
     Vector2 top_left; // after rotated
     Vector2 top_right; // after rotated
     int id = 0;
+    
+    // Resize functionality
+    bool is_resizing = false;
+    Vector2 resize_start_size;
+    Vector2 resize_start_mouse;
 
     void Draw() override;
     void Update(float dt) override {}
-
     
+    // Resize functionality methods
+    void CheckResize();
+    void HandleResize(Vector2 mouse_position);
+    Vector2 GetResizeHandlePosition() const;
     
     // Helper function to get top-left corner if needed
     Vector2 GetTopLeft() const {

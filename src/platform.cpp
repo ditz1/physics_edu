@@ -86,5 +86,71 @@ void Platform::Draw() {
     if (edit_mode){
         DrawCircleV(position, 20.0f, RED);
         DrawText(TextFormat("%.2f deg [%d]", rotation, id), position.x + 25, position.y - 10, 20, BLACK);
+        
+        // Draw resize handle on bottom right corner
+        Vector2 resize_handle = GetResizeHandlePosition();
+        Color handle_color = is_resizing ? ORANGE : YELLOW;
+        DrawCircleV(resize_handle, 8.0f, handle_color);
+        DrawCircleLines(resize_handle.x, resize_handle.y, 8.0f, BLACK);
     }
+}
+
+Vector2 Platform::GetResizeHandlePosition() const {
+    // Calculate bottom right corner position accounting for rotation
+    float cos_rot = cosf(rotation * DEG2RAD);
+    float sin_rot = sinf(rotation * DEG2RAD);
+    
+    // Local bottom right corner relative to center
+    Vector2 local_bottom_right = { size.x * 0.5f, size.y * 0.5f };
+    
+    // Rotate and translate to world coordinates
+    Vector2 world_bottom_right = {
+        local_bottom_right.x * cos_rot - local_bottom_right.y * sin_rot + position.x,
+        local_bottom_right.x * sin_rot + local_bottom_right.y * cos_rot + position.y
+    };
+    
+    return world_bottom_right;
+}
+
+void Platform::CheckResize() {
+    if (!edit_mode) return;
+    
+    Vector2 mouse_position = GetMousePosition();
+    Vector2 resize_handle = GetResizeHandlePosition();
+    
+    if (IsMouseButtonPressed(MOUSE_LEFT_BUTTON)) {
+        // Check if mouse is clicking on resize handle
+        if (CheckCollisionPointCircle(mouse_position, resize_handle, 8.0f)) {
+            is_resizing = true;
+            resize_start_size = size;
+            resize_start_mouse = mouse_position;
+            // Prevent normal grab from triggering
+            is_grabbed = false;
+        }
+    } else if (IsMouseButtonReleased(MOUSE_LEFT_BUTTON)) {
+        is_resizing = false;
+    }
+}
+
+void Platform::HandleResize(Vector2 mouse_position) {
+    if (!is_resizing) return;
+    
+    // Calculate distance from platform center to mouse position
+    Vector2 center_to_mouse = Vector2Subtract(mouse_position, position);
+    float distance_to_mouse = Vector2Length(center_to_mouse);
+    
+    // Calculate the initial distance from center to resize handle when resize started
+    Vector2 center_to_start = Vector2Subtract(resize_start_mouse, position);
+    float initial_distance = Vector2Length(center_to_start);
+    
+    // Calculate scale factor based on how much the mouse moved relative to initial distance
+    float scale_factor = (initial_distance > 0) ? (distance_to_mouse / initial_distance) : 1.0f;
+    
+    // Apply the scale factor to the original size, with minimum constraints
+    Vector2 new_size = {
+        fmax(20.0f, resize_start_size.x * scale_factor),
+        fmax(20.0f, resize_start_size.y * scale_factor)
+    };
+    
+    size = new_size;
 }

@@ -66,6 +66,21 @@ public:
     void DrawGhost(const Platform& slope_platform, const Platform& horizontal_platform);
     void DrawMultiPlatformGhost(const std::vector<Platform>& platforms);
     void CalculateMultiPlatformTrajectory(const std::vector<Platform>& platforms);
+    
+    // New reference frame-based trajectory calculation
+    void CalculateMultiReferenceFrameTrajectory(const std::vector<Platform>& platforms);
+    
+    // Helper methods for reference frame approach
+    struct PlatformPair {
+        const Platform* slope_platform;        // First platform in the pair (any steepness)
+        const Platform* horizontal_platform;   // Second platform in the pair (any steepness)
+        Vector2 transition_point;
+        bool has_intersection;
+    };
+    
+    std::vector<PlatformPair> FindConnectedPlatformPairs(const std::vector<Platform>& platforms, Vector2 start_position);
+    bool CalculateSingleReferenceFrame(const PlatformPair& pair, Vector2 start_pos, float initial_velocity, Vector2& end_pos, float& final_velocity);
+    bool CanTransitionToNextPlatform(Vector2 position, float velocity, const Platform* current_platform, const Platform* next_platform);
     void DrawTwoLineCollisionDebug(const std::vector<Platform>& platforms);
 
     Rectangle inline Rect() const {

@@ -190,14 +190,24 @@ int main(int argc, char* argv[]) {
 
 
         for (Platform& platform : all_platforms) {
-            platform.CheckGrab();
-            if (platform.is_grabbed) {
-                platform.is_selected = true; // mark platform as selected
+            // Handle resizing first (higher priority than grabbing)
+            platform.CheckResize();
+            if (platform.is_resizing) {
                 Vector2 mouse_position = GetMousePosition();
-                platform.Grab(mouse_position);
+                platform.HandleResize(mouse_position);
+                platform.is_selected = true; // mark platform as selected while resizing
             } else {
-                platform.is_selected = false; // mark platform as not selected
+                // Only check grab if not resizing
+                platform.CheckGrab();
+                if (platform.is_grabbed) {
+                    platform.is_selected = true; // mark platform as selected
+                    Vector2 mouse_position = GetMousePosition();
+                    platform.Grab(mouse_position);
+                } else {
+                    platform.is_selected = false; // mark platform as not selected
+                }
             }
+            
             if (platform.is_selected) {
                 if (IsKeyDown(KEY_Z)){
                     platform.rotation += 1.0f; // rotate platform clockwise
@@ -225,9 +235,9 @@ int main(int argc, char* argv[]) {
         }
 
         if (IsKeyPressed(KEY_PERIOD)){
-            box.mu_kinetic += 0.1f;
+            box.mu_kinetic += 0.01f;
         } else if (IsKeyPressed(KEY_COMMA)){
-            box.mu_kinetic -= 0.1f;
+            box.mu_kinetic -= 0.01f;
         }
 
         if (IsKeyPressed(KEY_E)){
@@ -288,33 +298,23 @@ int main(int argc, char* argv[]) {
             
             // Debug ghost calculation status
             if (box.has_prediction_start) {
-                DrawText(TextFormat("Ghost calculated: %s", box.ghost_calculated ? "YES" : "NO"), 10, 100, 20, RAYWHITE);
+                DrawText(TextFormat("Multi-platform ghost: %s", box.multi_platform_ghost_calculated ? "YES" : "NO"), 10, 100, 20, RAYWHITE);
                 DrawText(TextFormat("Is colliding: %s", box.is_colliding ? "YES" : "NO"), 10, 130, 20, RAYWHITE);
+                DrawText(TextFormat("Trajectory segments: %d", (int)box.trajectory_segments.size()), 10, 160, 20, RAYWHITE);
             }
             
-            if (box.ghost_calculated) {
-                // Find the slope and horizontal platforms for ghost drawing
-                const Platform* slope_platform = nullptr;
-                const Platform* horizontal_platform = nullptr;
-                
-                // Find the platform we're currently on (should be a slope)
-                for (const auto& platform : all_platforms) {
-                    if (box.IsPointOnPlatform(box.prediction_start_position, platform)) {
-                        slope_platform = &platform;
-                        break;
-                    }
+            // Draw multi-platform ghost trajectory using reference frames
+            if (box.has_prediction_start) {
+                box.DrawMultiPlatformGhost(all_platforms);
+            }
+            
+            // Show reference frame info
+            if (box.has_prediction_start && !box.trajectory_segments.empty()) {
+                int reference_frame_count = 0;
+                for (size_t i = 0; i < box.trajectory_segments.size(); i += 2) {
+                    reference_frame_count++;
                 }
-                
-                // Find the horizontal platform that connects to this slope
-                if (slope_platform) {
-                    horizontal_platform = box.FindNextPlatformToRight(*slope_platform, all_platforms);
-                }
-                
-                if (slope_platform && horizontal_platform) {
-                    box.DrawGhost(*slope_platform, *horizontal_platform);
-                } else {
-                    DrawText("Ghost platforms not found!", 10, 160, 20, RED);
-                }
+                DrawText(TextFormat("Reference frames: %d", reference_frame_count), 10, 190, 20, RAYWHITE);
             }
 
             Rectangle box_rect = { screenWidth - 200, 480, 100, 100 };
