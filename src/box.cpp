@@ -672,7 +672,7 @@ void Box::DrawMultiPlatformGhost(const std::vector<Platform>& platforms) {
         Color line_color = (abs(segment.platform->rotation) > 5.0f) ? ORANGE : YELLOW;
         
         // Draw trajectory line
-        DrawLineEx(segment.start_position, segment.end_position, 3.0f, line_color);
+        DrawLineEx(segment.start_position, segment.end_position, 5.0f, line_color);
         
         // Draw transition points
         DrawCircleV(segment.end_position, 5, GREEN);
@@ -1098,8 +1098,19 @@ const Platform* Box::FindNextPlatformToRight(const Platform& current_platform, c
 void Box::CalculateMultiReferenceFrameTrajectory(const std::vector<Platform>& platforms) {
     trajectory_segments.clear();
     
-    // POSITION FIX: Start from actual box position to match reality better
-    Vector2 current_start_position = position;
+    // POSITION FIX: Start from bottom right corner to match collision detection
+    float box_rotation_rad = rotation * DEG2RAD;
+    float cos_rot = cosf(box_rotation_rad);
+    float sin_rot = sinf(box_rotation_rad);
+    
+    // Local coordinates of right bottom corner (same as collision detection)
+    Vector2 local_right_bottom = { size.x * 0.5f, size.y * 0.5f };
+    
+    // Rotate and translate to world coordinates
+    Vector2 current_start_position = {
+        local_right_bottom.x * cos_rot - local_right_bottom.y * sin_rot + position.x,
+        local_right_bottom.x * sin_rot + local_right_bottom.y * cos_rot + position.y
+    };
     
     // CRITICAL FIX: Use speed along slope direction, not total speed magnitude
     // This matches the real physics which projects velocity onto slope
@@ -1157,9 +1168,10 @@ void Box::CalculateMultiReferenceFrameTrajectory(const std::vector<Platform>& pl
     for (int frame_offset = 0; frame_offset < max_frames; frame_offset++) {
         int frame = starting_frame + frame_offset;
         
-        // Each reference frame uses 2 consecutive platforms
+        // Simple pairing: slope at even index, horizontal at odd index  
         const Platform* slope_platform = sorted_platforms[frame * 2];
-        const Platform* horizontal_platform = sorted_platforms[frame * 2 + 1];
+        const Platform* horizontal_platform = (frame * 2 + 1 < (int)sorted_platforms.size()) ? 
+                                            sorted_platforms[frame * 2 + 1] : nullptr;
         
         if (!slope_platform || !horizontal_platform) {
             final_ghost_position = current_start_position;
@@ -1204,7 +1216,7 @@ void Box::CalculateMultiReferenceFrameTrajectory(const std::vector<Platform>& pl
                 Vector2 horizontal_direction = Vector2Normalize(Vector2Subtract(horizontal_platform->top_right, horizontal_platform->top_left));
                 Vector2 horizontal_end_position = Vector2Add(current_start_position, Vector2Scale(horizontal_direction, remaining_distance));
                 
-                // Add horizontal segment
+                // Add horizontal segment  
                 TrajectorySegment horizontal_segment;
                 horizontal_segment.start_position = current_start_position;
                 horizontal_segment.end_position = horizontal_end_position;
@@ -1293,7 +1305,10 @@ void Box::CalculateMultiReferenceFrameTrajectory(const std::vector<Platform>& pl
         
         // Set up for next reference frame
         current_speed = remaining_velocity;
-        current_start_position = horizontal_end_position;
+        current_start_position = horizontal_end_position; // Continue from end of horizontal platform
+        
+        // Continue with next frame in sequence
+        // The sorted platform logic will handle the next frame automatically
     }
     
     // Final result - minimal output
