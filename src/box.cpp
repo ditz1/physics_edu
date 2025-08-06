@@ -695,6 +695,22 @@ void Box::DrawMultiPlatformGhost(const std::vector<Platform>& platforms) {
     }
 }
 
+void Box::ResetToOrigin() {
+    position = origin_position;
+    velocity = {0.0f, 0.0f};
+    acceleration = {0.0f, 0.0f};
+    is_colliding = false;
+    current_platform_id = -1;
+    last_platform_id = -1;
+    
+    // Reset ghost calculations
+    ghost_calculated = false;
+    multi_platform_ghost_calculated = false;
+    has_prediction_start = false;
+    
+    std::cout << "Box reset to origin position: (" << origin_position.x << ", " << origin_position.y << ")" << std::endl;
+}
+
 void Box::CalculateMultiPlatformTrajectory(const std::vector<Platform>& platforms) {
     trajectory_segments.clear();
     

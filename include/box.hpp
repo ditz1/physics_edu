@@ -34,6 +34,7 @@ public:
     Vector2 transition_point_stored;
     float distance_traveled = 0.0f;
     Texture2D* texture;
+    Vector2 origin_position = {0.0f, 0.0f};
 
     std::vector<TrajectorySegment> trajectory_segments;
     Vector2 final_ghost_position;
@@ -44,6 +45,7 @@ public:
     bool CheckTrajectoryPlatformCollision(Vector2 start_pos, Vector2 end_pos, const Platform& platform);
     Vector2 FindTrajectoryCollisionPoint(Vector2 start_pos, Vector2 end_pos, const Platform& platform);
     Vector2 CalculatePostLandingTrajectory(Vector2 landing_position, Vector2 landing_velocity, const Platform& landing_platform);
+    void ResetToOrigin();
 
     void Update(float dt, const std::vector<Platform>& platforms = {});
     void Draw() override;

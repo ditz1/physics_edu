@@ -15,7 +15,7 @@ void LevelSelector::Draw() {
     float menu_y = (GetScreenHeight() - menu_height) / 2.0f;
     
     DrawRectangleRounded((Rectangle){menu_x, menu_y, menu_width, menu_height}, 0.1f, 16, LIGHTGRAY);
-    DrawRectangleRoundedLinesEx((Rectangle){menu_x, menu_y, menu_width, menu_height}, 0.1f, 16, 3.0f, BLACK);
+    DrawRectangleRoundedLines((Rectangle){menu_x, menu_y, menu_width, menu_height}, 0.1f, 16, BLACK);
     
     // Draw title
     DrawText("LEVEL SELECT", (int)(menu_x + menu_width/2 - MeasureText("LEVEL SELECT", 30)/2), (int)(menu_y + 20), 30, BLACK);
@@ -87,7 +87,7 @@ void LevelSelector::DrawLevelButton(int level, int variant, Rectangle button_rec
     }
     
     DrawRectangleRounded(button_rect, 0.2f, 8, button_color);
-    DrawRectangleRoundedLinesEx(button_rect, 0.2f, 8, 2.0f, is_selected ? YELLOW : BLACK);
+    DrawRectangleRoundedLines(button_rect, 0.2f, 8, is_selected ? YELLOW : BLACK);
     
     // Draw variant number
     const char* text = TextFormat("%d", variant);
@@ -129,7 +129,7 @@ std::string LevelSelector::GetLevelPath(int level, int variant) {
     return ""; // File doesn't exist
 }
 
-bool LevelSelector::LoadSelectedLevel(std::vector<Platform>& platforms) {
+bool LevelSelector::LoadSelectedLevel(std::vector<Platform>& platforms, Box& box) {
     std::string level_path = GetLevelPath(selected_level, selected_variant);
     
     if (level_path.empty()) {
@@ -137,10 +137,10 @@ bool LevelSelector::LoadSelectedLevel(std::vector<Platform>& platforms) {
         return false;
     }
     
-    return LoadLevelConfig(level_path, platforms);
+    return LoadLevelConfig(level_path, platforms, box);
 }
 
-bool LevelSelector::LoadLevelConfig(const std::string& filepath, std::vector<Platform>& platforms) {
+bool LevelSelector::LoadLevelConfig(const std::string& filepath, std::vector<Platform>& platforms, Box& box) {
     std::ifstream file(filepath);
     
     if (!file.is_open()) {
@@ -152,28 +152,64 @@ bool LevelSelector::LoadLevelConfig(const std::string& filepath, std::vector<Pla
     
     std::string line;
     int platform_count = 0;
+    bool box_position_loaded = false;
+    Vector2 default_box_position = { 75.0f, (float)GetScreenHeight() / 2.0f - 200.0f }; // Default position
+    
     while (std::getline(file, line)) {
         if (line.empty()) continue;
         
-        char type;
-        float center_x, center_y, width, height, rotation;
-        
-        if (sscanf(line.c_str(), "%c, %f, %f, %f, %f, %f", 
-                   &type, &center_x, &center_y, &width, &height, &rotation) == 6) {
-            if (type == 'R') {
-                Vector2 pos = { center_x, center_y };
-                Vector2 size = { width, height };
+        // Check if this line defines a box position
+        if (line.find("BOX") == 0) {
+            // Parse BOX line: "BOX, x, y"
+            float box_x, box_y;
+            
+            // Find the first comma and parse from there
+            size_t first_comma = line.find(',');
+            if (first_comma != std::string::npos) {
+                std::string coords = line.substr(first_comma + 1);
                 
-                Platform new_platform(pos, size, rotation);
-                new_platform.id = platform_count;
-                platforms.push_back(new_platform);
-                platform_count++;
-                std::cout << "Loaded platform " << platform_count << ": pos(" << pos.x << "," << pos.y 
-                         << ") size(" << size.x << "," << size.y << ") rot(" << rotation << ")" << std::endl;
+                if (sscanf(coords.c_str(), " %f, %f", &box_x, &box_y) == 2) {
+                    Vector2 box_pos = { box_x, box_y };
+                    box.position = box_pos;
+                    box.origin_position = box_pos; // Set the origin position for reset
+                    box_position_loaded = true;
+                    std::cout << "Loaded box position: (" << box_x << ", " << box_y << ")" << std::endl;
+                } else {
+                    std::cout << "Failed to parse box coordinates from: " << coords << std::endl;
+                }
+            } else {
+                std::cout << "Failed to find comma in BOX line: " << line << std::endl;
             }
-        } else {
-            std::cout << "Failed to parse line: " << line << std::endl;
         }
+        // Otherwise check if this line defines a platform
+        else {
+            char type;
+            float center_x, center_y, width, height, rotation;
+            
+            if (sscanf(line.c_str(), "%c, %f, %f, %f, %f, %f", 
+                       &type, &center_x, &center_y, &width, &height, &rotation) == 6) {
+                if (type == 'R') {
+                    Vector2 pos = { center_x, center_y };
+                    Vector2 size = { width, height };
+                    
+                    Platform new_platform(pos, size, rotation);
+                    new_platform.id = platform_count;
+                    platforms.push_back(new_platform);
+                    platform_count++;
+                    std::cout << "Loaded platform " << platform_count << ": pos(" << pos.x << "," << pos.y 
+                             << ") size(" << size.x << "," << size.y << ") rot(" << rotation << ")" << std::endl;
+                }
+            } else {
+                std::cout << "Failed to parse line: " << line << std::endl;
+            }
+        }
+    }
+    
+    // If no box position was loaded from file, use default
+    if (!box_position_loaded) {
+        box.position = default_box_position;
+        box.origin_position = default_box_position;
+        std::cout << "Using default box position: (" << default_box_position.x << ", " << default_box_position.y << ")" << std::endl;
     }
     
     std::cout << "Level configuration loaded from " << filepath << " - " << platform_count << " platforms loaded" << std::endl;

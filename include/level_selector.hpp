@@ -1,6 +1,7 @@
 #pragma once
 #include "raylib.h"
 #include "platform.hpp"
+#include "box.hpp"
 #include <vector>
 #include <string>
 #include <filesystem>
@@ -16,11 +17,11 @@ public:
     
     void Draw();
     void Update();
-    bool LoadSelectedLevel(std::vector<Platform>& platforms);
+    bool LoadSelectedLevel(std::vector<Platform>& platforms, Box& box);
     
 private:
     std::vector<std::string> GetAvailableFiles(int level);
-    bool LoadLevelConfig(const std::string& filepath, std::vector<Platform>& platforms);
+    bool LoadLevelConfig(const std::string& filepath, std::vector<Platform>& platforms, Box& box);
     void DrawLevelButton(int level, int variant, Rectangle button_rect, bool is_selected);
     std::string GetLevelPath(int level, int variant);
 };

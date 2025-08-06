@@ -162,16 +162,20 @@ int main(int argc, char* argv[]) {
             level_selector.is_active = !level_selector.is_active;
         }
 
+        if (IsKeyPressed(KEY_B)) {
+            box.ResetToOrigin();
+            std::cout << "Scene reset - box returned to origin" << std::endl;
+        }
+
         if (level_selector.is_active) {
             level_selector.Update();
             
             // Load selected level
             if (IsKeyPressed(KEY_ENTER)) {
-                if (level_selector.LoadSelectedLevel(all_platforms)) {
+                if (level_selector.LoadSelectedLevel(all_platforms, box)) {
                     level_selector.is_active = false;
                     
-                    // Reset box and ghost calculations
-                    box.position = { 75.0f, screenHeight / 2.0f - 200.0f };
+                    // Box position is now loaded from file, just reset physics state
                     box.velocity = { 0.0f, 0.0f };
                     box.acceleration = { 0.0f, 0.0f };
                     box.ghost_calculated = false;
@@ -308,7 +312,7 @@ int main(int argc, char* argv[]) {
             }
 
             if (toolbox_active) {
-                toolbox.Update(dt, all_platforms);
+                toolbox.Update(dt, all_platforms, box);
             }
         }
 
@@ -322,7 +326,7 @@ int main(int argc, char* argv[]) {
             // Only draw game UI when level selector is not active
             if (!level_selector.is_active) {
                 if (toolbox_active) {
-                    toolbox.Draw();
+                    toolbox.Draw(); 
                 }
 
                 DrawText("get the box to the green square!", 400, 200, 20, RAYWHITE);

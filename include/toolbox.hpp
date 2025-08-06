@@ -12,9 +12,8 @@ extern std::vector<Platform> all_platforms;
 class Toolbox {
 public:
     void Draw();
-    void Update(float dt, std::vector<Platform>& platforms);
-    void SavePlatformConfiguration(const std::vector<Platform>& platforms);
-    
+    void Update(float dt, std::vector<Platform>& platforms, const Box& box);
+    void SavePlatformConfiguration(const std::vector<Platform>& platforms, const Box& box);    
     std::vector<Object*> objects;
     
     // Platform creation state

@@ -56,12 +56,12 @@ void Toolbox::Draw() {
     }
 }
 
-void Toolbox::Update(float dt, std::vector<Platform>& platforms) {
+void Toolbox::Update(float dt, std::vector<Platform>& platforms, const Box& box) {
     if (!edit_mode) return;
     
     // save platform configuration with 'J' key
     if (IsKeyPressed(KEY_J)) {
-        SavePlatformConfiguration(platforms);
+        SavePlatformConfiguration(platforms, box);
     }
     
     // toggle platform creation mode with '1' key
@@ -107,7 +107,7 @@ void Toolbox::Update(float dt, std::vector<Platform>& platforms) {
 }
 
 // THIS WILL ONLY SAVE IN EDIT MODE
-void Toolbox::SavePlatformConfiguration(const std::vector<Platform>& platforms) {
+void Toolbox::SavePlatformConfiguration(const std::vector<Platform>& platforms, const Box& box) {
     std::string base_filename = "platform_config";
     std::string extension = ".txt";
     std::string filename = base_filename + extension;
@@ -129,13 +129,17 @@ void Toolbox::SavePlatformConfiguration(const std::vector<Platform>& platforms) 
         return;
     }
     
+    // Save box position first
+    file << "BOX, " << box.position.x << ", " << box.position.y << std::endl;
+    
+    // Then save platforms
     for (const Platform& platform : platforms) {
         file << "R, " << platform.position.x << ", " << platform.position.y 
              << ", " << platform.size.x << ", " << platform.size.y 
              << ", " << platform.rotation << std::endl;
     }
 
-    std::cout << "platform configuration saved to " << filename << std::endl;
+    std::cout << "Configuration with box position saved to " << filename << std::endl;
     
     file.close();
 }
