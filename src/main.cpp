@@ -1,5 +1,6 @@
 #include "../include/raylib/raylib.h"
 #include "../include/toolbox.hpp"
+#include "../include/level_selector.hpp"
 #include <cstring>
 
 bool edit_mode = false;
@@ -106,12 +107,12 @@ int main(int argc, char* argv[]) {
 
     float dt_modifier = 1.0f;
 
-
-    //DisableCursor();
     SetTargetFPS(60);
 
+    // Initialize level selector
+    LevelSelector level_selector;
 
-     bool config_loaded = false;
+    bool config_loaded = false;
     for (int i = 1; i < argc; i++) {
         if (strcmp(argv[i], "-f") == 0 && i + 1 < argc) {
             // Load configuration from specified file
@@ -141,10 +142,7 @@ int main(int argc, char* argv[]) {
         all_platforms.push_back(platform2);
     }
 
-
-
     float dt = 1.0f / 30.0f; // Fixed time step for 60 FPS
-
 
     Box box = Box(50, 50);
     box.position = { 75.0f, screenHeight / 2.0f - 200.0f };
@@ -152,224 +150,244 @@ int main(int argc, char* argv[]) {
     box.texture = &bananas_tex;
     box.ghost_calculated = false;
 
-
     Toolbox toolbox;
     bool toolbox_active = true;
-
-  
     float box_force = 50.0f;
-
-    
-
-  
 
     while (!WindowShouldClose()) {
         dt = 1.0f / (30.0f * dt_modifier);
 
-
-        bool was_grabbed_last_frame = box.is_grabbed;
-        box.CheckGrab();
-        if (box.is_grabbed) {
-            Vector2 mouse_position = GetMousePosition();
-            box.Grab(mouse_position);
-            box.velocity = { 0.0f, 0.0f };
-            box.acceleration = { 0.0f, 0.0f };
-            box.ghost_calculated = false; // reset ghost calculation when grabbed
+        // Handle level selector
+        if (IsKeyPressed(KEY_M)) {
+            level_selector.is_active = !level_selector.is_active;
         }
 
-        // Check if box was just released
-        if (was_grabbed_last_frame && !box.is_grabbed) {
-            // Reset ghost calculation when box is released
-            box.ghost_calculated = false;
-            box.multi_platform_ghost_calculated = false;
-            box.has_prediction_start = false;
+        if (level_selector.is_active) {
+            level_selector.Update();
             
-            // If box is already on a platform when released, set prediction start immediately
-            if (box.is_colliding) {
-                box.SetPredictionStartPosition();
-                box.CalculateGhostTrajectory(all_platforms);
+            // Load selected level
+            if (IsKeyPressed(KEY_ENTER)) {
+                if (level_selector.LoadSelectedLevel(all_platforms)) {
+                    level_selector.is_active = false;
+                    
+                    // Reset box and ghost calculations
+                    box.position = { 75.0f, screenHeight / 2.0f - 200.0f };
+                    box.velocity = { 0.0f, 0.0f };
+                    box.acceleration = { 0.0f, 0.0f };
+                    box.ghost_calculated = false;
+                    box.multi_platform_ghost_calculated = false;
+                    box.has_prediction_start = false;
+                    box.is_colliding = false;
+                    
+                    std::cout << "Level loaded successfully!" << std::endl;
+                }
             }
         }
 
-
-        for (Platform& platform : all_platforms) {
-            // Handle resizing first (higher priority than grabbing)
-            platform.CheckResize();
-            if (platform.is_resizing) {
+        // Only update game logic when level selector is not active
+        if (!level_selector.is_active) {
+            bool was_grabbed_last_frame = box.is_grabbed;
+            box.CheckGrab();
+            if (box.is_grabbed) {
                 Vector2 mouse_position = GetMousePosition();
-                platform.HandleResize(mouse_position);
-                platform.is_selected = true; // mark platform as selected while resizing
-            } else {
-                // Only check grab if not resizing
-                platform.CheckGrab();
-                if (platform.is_grabbed) {
-                    platform.is_selected = true; // mark platform as selected
+                box.Grab(mouse_position);
+                box.velocity = { 0.0f, 0.0f };
+                box.acceleration = { 0.0f, 0.0f };
+                box.ghost_calculated = false; // reset ghost calculation when grabbed
+            }
+
+            // Check if box was just released
+            if (was_grabbed_last_frame && !box.is_grabbed) {
+                // Reset ghost calculation when box is released
+                box.ghost_calculated = false;
+                box.multi_platform_ghost_calculated = false;
+                box.has_prediction_start = false;
+                
+                // If box is already on a platform when released, set prediction start immediately
+                if (box.is_colliding) {
+                    box.SetPredictionStartPosition();
+                    box.CalculateGhostTrajectory(all_platforms);
+                }
+            }
+
+            // Handle platform editing and deletion (only when not in level selector)
+            int platform_to_delete = -1;
+            
+            for (int i = 0; i < all_platforms.size(); i++) {
+                Platform& platform = all_platforms[i];
+                
+                platform.CheckResize();
+                if (platform.is_resizing) {
                     Vector2 mouse_position = GetMousePosition();
-                    platform.Grab(mouse_position);
+                    platform.HandleResize(mouse_position);
+                    platform.is_selected = true;
                 } else {
-                    platform.is_selected = false; // mark platform as not selected
+                    platform.CheckGrab();
+                    if (platform.is_grabbed) {
+                        platform.is_selected = true;
+                        Vector2 mouse_position = GetMousePosition();
+                        platform.Grab(mouse_position);
+                        
+                        if (IsKeyPressed(KEY_D)) {
+                            platform_to_delete = i;
+                            std::cout << "Marking platform " << i << " for deletion" << std::endl;
+                        }
+                    } else {
+                        platform.is_selected = false;
+                    }
+                }
+                
+                if (platform.is_selected) {
+                    if (IsKeyDown(KEY_Z)){
+                        platform.rotation += 1.0f;
+                    } else if (IsKeyDown(KEY_C)) {
+                        platform.rotation -= 1.0f;
+                    }
                 }
             }
             
-            if (platform.is_selected) {
-                if (IsKeyDown(KEY_Z)){
-                    platform.rotation += 1.0f; // rotate platform clockwise
-                } else if (IsKeyDown(KEY_C)) {
-                    platform.rotation -= 1.0f; // rotate platform counter-clockwise
+            // Delete the marked platform
+            if (platform_to_delete >= 0) {
+                all_platforms.erase(all_platforms.begin() + platform_to_delete);
+                std::cout << "Deleted platform " << platform_to_delete << std::endl;
+                
+                box.ghost_calculated = false;
+                box.multi_platform_ghost_calculated = false;
+                box.has_prediction_start = false;
+                
+                if (box.is_colliding) {
+                    box.SetPredictionStartPosition();
+                    box.CalculateGhostTrajectory(all_platforms);
                 }
             }
-        }
 
-  
+            // Handle other key inputs (only when level selector is not active)
+            if (IsKeyPressed(KEY_TAB)){
+                toolbox_active = !toolbox_active;
+            }
 
+            if (IsKeyPressed(KEY_LEFT)){
+                box_force -= 1.0f;
+            } else if (IsKeyPressed(KEY_RIGHT)){
+                box_force += 1.0f;
+            }
+            if (IsKeyPressed(KEY_SPACE)){
+                box.acceleration = { box_force, 0.0f };
+                box.velocity = { box_force, 0.0f };
+            }
 
-        if (IsKeyPressed(KEY_TAB)){
-            toolbox_active = !toolbox_active;
-        }
+            if (IsKeyPressed(KEY_PERIOD)){
+                box.mu_kinetic += 0.01f;
+            } else if (IsKeyPressed(KEY_COMMA)){
+                box.mu_kinetic -= 0.01f;
+            }
 
-        if (IsKeyPressed(KEY_LEFT)){
-            box_force -= 1.0f;
-        } else if (IsKeyPressed(KEY_RIGHT)){
-            box_force += 1.0f;
-        }
-        if (IsKeyPressed(KEY_SPACE)){
-            box.acceleration = { box_force, 0.0f };
-            box.velocity = { box_force, 0.0f }; // reset velocity
-        }
+            if (IsKeyPressed(KEY_SEMICOLON)){
+                box.mu_kinetic -= 0.1f;
+            } else if (IsKeyPressed(KEY_APOSTROPHE)){
+                box.mu_kinetic += 0.1f;
+            }
 
-        if (IsKeyPressed(KEY_PERIOD)){
-            box.mu_kinetic += 0.01f;
-        } else if (IsKeyPressed(KEY_COMMA)){
-            box.mu_kinetic -= 0.01f;
-        }
+            if (IsKeyPressed(KEY_MINUS)){
+                dt_modifier += 0.5f;
+            } else if (IsKeyPressed(KEY_EQUAL)){
+                dt_modifier -= 0.5f;
+            }
 
-        if (IsKeyPressed(KEY_SEMICOLON)){
-            box.mu_kinetic -= 0.1f;
-        } else if (IsKeyPressed(KEY_APOSTROPHE)){
-            box.mu_kinetic += 0.1f;
-        }
+            if (IsKeyPressed(KEY_E)){
+                edit_mode = !edit_mode;
+            }
 
-        if (IsKeyPressed(KEY_MINUS)){
-            dt_modifier += 0.5f;
-        } else if (IsKeyPressed(KEY_EQUAL)){
-            dt_modifier -= 0.5f;
-        }
+            // Update game logic
+            if (!edit_mode) {
+                box.was_colliding_last_frame = box.is_colliding;
+                box.last_platform_id = box.current_platform_id;
+                
+                box.CheckPlatformCollisionTwoLine(all_platforms);
+                box.Update(dt, all_platforms);
+            }
 
-        if (IsKeyPressed(KEY_E)){
-            edit_mode = !edit_mode;
-        }
-
-        //////////////////
-        // UPDATE LOGIC //
-        //////////////////
-        if (!edit_mode) {
-          
-            // Check collision BEFORE physics update to prevent box from moving into platform
-            box.was_colliding_last_frame = box.is_colliding; // store collision state for next frame
-            box.last_platform_id = box.current_platform_id; // store last platform ID for next frame
-            
-            // Use the new two-line collision system BEFORE physics update
-            box.CheckPlatformCollisionTwoLine(all_platforms);
-            
-            box.Update(dt, all_platforms);
-            //platform.Update(dt);
-        }
-
-      
-
-        if (toolbox_active) {
-            toolbox.Update(dt, all_platforms);
+            if (toolbox_active) {
+                toolbox.Update(dt, all_platforms);
+            }
         }
 
         for (auto& plat : all_platforms) {
             plat.Draw();
         }
 
-
-
         BeginDrawing();
             ClearBackground(DARKGRAY);
-            if (toolbox_active) {
-                toolbox.Draw();
-            }
             
-
-            
-
-            DrawText("get the box to the green square!", 400, 200, 20, RAYWHITE);
-
-            // Check collisions with both platforms
-            // box.CheckPlatformCollisionSAT(platform, 1);  // Platform ID 1 (higher priority)
-            // if (!box.is_colliding) {
-            //     box.CheckPlatformCollisionSAT(platform2, 0);   // Platform ID 0 (lower priority)
-            // }
-
-            // Set color based on collision state
-            //if (wasColliding){
-            //    box.color = PINK;
-            //} else {
-            //    box.color = RED;
-            //}
-            
-            // Debug ghost calculation status
-            if (box.has_prediction_start) {
-                DrawText(TextFormat("Multi-platform ghost: %s", box.multi_platform_ghost_calculated ? "YES" : "NO"), 10, 100, 20, RAYWHITE);
-                DrawText(TextFormat("Is colliding: %s", box.is_colliding ? "YES" : "NO"), 10, 130, 20, RAYWHITE);
-                DrawText(TextFormat("Trajectory segments: %d", (int)box.trajectory_segments.size()), 10, 160, 20, RAYWHITE);
-            }
-            
-            // Draw multi-platform ghost trajectory using reference frames
-            if (box.has_prediction_start) {
-                box.DrawMultiPlatformGhost(all_platforms);
-            }
-            
-            // Show reference frame info
-            if (box.has_prediction_start && !box.trajectory_segments.empty()) {
-                int reference_frame_count = 0;
-                for (size_t i = 0; i < box.trajectory_segments.size(); i += 2) {
-                    reference_frame_count++;
+            // Only draw game UI when level selector is not active
+            if (!level_selector.is_active) {
+                if (toolbox_active) {
+                    toolbox.Draw();
                 }
-                DrawText(TextFormat("Reference frames: %d", reference_frame_count), 10, 190, 20, RAYWHITE);
-            }
 
-            Rectangle box_rect = { screenWidth - 200, 480, 100, 100 };
-            // platform.Draw();
-            // platform2.Draw();
-            //spring.Draw();
-            for (Platform& plat : all_platforms) {
-                plat.Draw();
-            }
+                DrawText("get the box to the green square!", 400, 200, 20, RAYWHITE);
 
-            DrawRectangleLinesEx(box_rect, 1.0f, GREEN);
-            box.Draw();
-            box.DrawVectors();
+                // Debug ghost calculation status
+                if (box.has_prediction_start) {
+                    DrawText(TextFormat("Multi-platform ghost: %s", box.multi_platform_ghost_calculated ? "YES" : "NO"), 10, 100, 20, RAYWHITE);
+                    DrawText(TextFormat("Is colliding: %s", box.is_colliding ? "YES" : "NO"), 10, 130, 20, RAYWHITE);
+                    DrawText(TextFormat("Trajectory segments: %d", (int)box.trajectory_segments.size()), 10, 160, 20, RAYWHITE);
+                }
+                
+                // Draw multi-platform ghost trajectory using reference frames
+                if (box.has_prediction_start) {
+                    box.DrawMultiPlatformGhost(all_platforms);
+                }
+                
+                // Show reference frame info
+                if (box.has_prediction_start && !box.trajectory_segments.empty()) {
+                    int reference_frame_count = 0;
+                    for (size_t i = 0; i < box.trajectory_segments.size(); i += 2) {
+                        reference_frame_count++;
+                    }
+                    DrawText(TextFormat("Reference frames: %d", reference_frame_count), 10, 190, 20, RAYWHITE);
+                }
+
+                Rectangle box_rect = { screenWidth - 200, 480, 100, 100 };
+                
+                for (Platform& plat : all_platforms) {
+                    plat.Draw();
+                }
+
+                DrawRectangleLinesEx(box_rect, 1.0f, GREEN);
+                box.Draw();
+                box.DrawVectors();
+                
+                box.DrawTwoLineCollisionDebug(all_platforms);
+                DrawTextureEx(gorilla_tex, {box_rect.x, box_rect.y}, 0.0f, 0.125f, WHITE);
+
+                if (CheckCollisionRecs(box_rect, box.Rect())){
+                    DrawText("Nice!", box_rect.x - 100, box_rect.y - 100, 20, GREEN);
+                }
+
+                DrawText(TextFormat("Force: %.2f", box_force), 10, 10, 20, RAYWHITE);
+                DrawText(TextFormat("Box Velocity: (%.2f, %.2f)", box.velocity.x, box.velocity.y), 10, 40, 20, RAYWHITE);
+                DrawText(TextFormat("Box Friction (mu_f): %.2f", box.mu_kinetic), 10, 70, 20, RAYWHITE);
+                DrawFPS(10, 10);
+
+                if (edit_mode) {
+                    DrawText("EDIT MODE", screenWidth - 140, screenHeight - 40, 20, RED);
+                    DrawText("Grab platform + D = Delete", screenWidth - 200, screenHeight - 70, 16, YELLOW);
+                }
+                
+                DrawText(TextFormat("Num Platforms: %d", all_platforms.size()), 50, 10, 20, RAYWHITE);
+                if (toolbox.creating_platform) {
+                    DrawText("Creating Platform", 50, 40, 20, RAYWHITE);
+                }
+                
+                // Show level selector instruction
+                DrawText("Press M for Level Select", 10, screenHeight - 30, 16, YELLOW);
+            }
             
-            // Draw debug visualization of the two-line collision system
-            box.DrawTwoLineCollisionDebug(all_platforms);
-            DrawTextureEx(gorilla_tex, {box_rect.x, box_rect.y}, 0.0f, 0.125f, WHITE);
-
-            if (CheckCollisionRecs(box_rect, box.Rect())){
-                DrawText("Nice!", box_rect.x - 100, box_rect.y - 100, 20, GREEN);
-            }
-
-             DrawText(TextFormat("Force: %.2f", box_force), 10, 10, 20, RAYWHITE);
-             DrawText(TextFormat("Box Velocity: (%.2f, %.2f)", box.velocity.x, box.velocity.y), 10, 40, 20, RAYWHITE);
-             DrawText(TextFormat("Box Friction (mu_f): %.2f", box.mu_kinetic), 10, 70, 20, RAYWHITE);
-            DrawFPS(10, 10);
-
-   
-      
-
-            if (edit_mode) {
-                DrawText("EDIT MODE", screenWidth - 140, screenHeight - 40, 20, RED);
-            }
-            DrawText(TextFormat("Num Platforms: %d", all_platforms.size()), 50, 10, 20, RAYWHITE);
-            if (toolbox.creating_platform) {
-                DrawText("Creating Platform", 50, 40, 20, RAYWHITE);
-            }
+            // Draw level selector (this will draw on top of everything)
+            level_selector.Draw();
+            
         EndDrawing();
-
-        
     }
 
     UnloadTexture(gorilla_tex);

@@ -1,0 +1,182 @@
+#include "level_selector.hpp"
+#include <fstream>
+#include <sstream>
+
+void LevelSelector::Draw() {
+    if (!is_active) return;
+    
+    // Draw semi-transparent overlay
+    DrawRectangle(0, 0, GetScreenWidth(), GetScreenHeight(), (Color){0, 0, 0, 180});
+    
+    // Draw menu background
+    float menu_width = 600.0f;
+    float menu_height = 400.0f;
+    float menu_x = (GetScreenWidth() - menu_width) / 2.0f;
+    float menu_y = (GetScreenHeight() - menu_height) / 2.0f;
+    
+    DrawRectangleRounded((Rectangle){menu_x, menu_y, menu_width, menu_height}, 0.1f, 16, LIGHTGRAY);
+    DrawRectangleRoundedLinesEx((Rectangle){menu_x, menu_y, menu_width, menu_height}, 0.1f, 16, 3.0f, BLACK);
+    
+    // Draw title
+    DrawText("LEVEL SELECT", (int)(menu_x + menu_width/2 - MeasureText("LEVEL SELECT", 30)/2), (int)(menu_y + 20), 30, BLACK);
+    DrawText("Press M to close", (int)(menu_x + menu_width/2 - MeasureText("Press M to close", 16)/2), (int)(menu_y + 60), 16, DARKGRAY);
+    
+    // Draw level grid
+    float button_width = 80.0f;
+    float button_height = 40.0f;
+    float start_y = menu_y + 100.0f;
+    float level_spacing = 60.0f;
+    float variant_spacing = 100.0f;
+    
+    for (int level = 1; level <= max_levels; level++) {
+        float row_y = start_y + (level - 1) * level_spacing;
+        
+        // Draw level label
+        DrawText(TextFormat("Level %d", level), (int)(menu_x + 50), (int)(row_y + 10), 20, BLACK);
+        
+        // Draw variant buttons
+        for (int variant = 1; variant <= max_variants_per_level; variant++) {
+            float button_x = menu_x + 150.0f + (variant - 1) * variant_spacing;
+            Rectangle button_rect = {button_x, row_y, button_width, button_height};
+            
+            bool is_selected = (level == selected_level && variant == selected_variant);
+            DrawLevelButton(level, variant, button_rect, is_selected);
+        }
+    }
+    
+    // Draw instructions
+    const char* instruction_text = "Use arrow keys to navigate, ENTER to load level";
+    DrawText(instruction_text, 
+             (int)(menu_x + menu_width/2 - MeasureText(instruction_text, 14)/2), 
+             (int)(menu_y + menu_height - 40), 14, DARKGRAY);
+}
+
+void LevelSelector::Update() {
+    if (!is_active) return;
+    
+    // Navigation
+    if (IsKeyPressed(KEY_LEFT)) {
+        selected_variant--;
+        if (selected_variant < 1) selected_variant = max_variants_per_level;
+    }
+    if (IsKeyPressed(KEY_RIGHT)) {
+        selected_variant++;
+        if (selected_variant > max_variants_per_level) selected_variant = 1;
+    }
+    if (IsKeyPressed(KEY_UP)) {
+        selected_level--;
+        if (selected_level < 1) selected_level = max_levels;
+    }
+    if (IsKeyPressed(KEY_DOWN)) {
+        selected_level++;
+        if (selected_level > max_levels) selected_level = 1;
+    }
+}
+
+void LevelSelector::DrawLevelButton(int level, int variant, Rectangle button_rect, bool is_selected) {
+    // Check if this level variant actually exists
+    std::string level_path = GetLevelPath(level, variant);
+    bool exists = std::filesystem::exists(level_path);
+    
+    Color button_color = GRAY;
+    Color text_color = DARKGRAY;
+    
+    if (exists) {
+        button_color = is_selected ? DARKGREEN : GREEN;
+        text_color = WHITE;
+    }
+    
+    DrawRectangleRounded(button_rect, 0.2f, 8, button_color);
+    DrawRectangleRoundedLinesEx(button_rect, 0.2f, 8, 2.0f, is_selected ? YELLOW : BLACK);
+    
+    // Draw variant number
+    const char* text = TextFormat("%d", variant);
+    int text_width = MeasureText(text, 20);
+    DrawText(text, 
+             (int)(button_rect.x + (button_rect.width - text_width) / 2),
+             (int)(button_rect.y + (button_rect.height - 20) / 2),
+             20, text_color);
+    
+    // Draw "missing" indicator if file doesn't exist
+    if (!exists) {
+        DrawText("X", (int)(button_rect.x + 5), (int)(button_rect.y + 5), 12, RED);
+    }
+}
+
+std::string LevelSelector::GetLevelPath(int level, int variant) {
+    // Try different filename patterns based on variant
+    std::string base_path = "../configs/lvl_" + std::to_string(level) + "/";
+    
+    if (variant == 1) {
+        // First variant might be named "platform_config.txt"
+        std::string path1 = base_path + "platform_config.txt";
+        if (std::filesystem::exists(path1)) {
+            return path1;
+        }
+        // Or "platform_config_1.txt"
+        std::string path2 = base_path + "platform_config_1.txt";
+        if (std::filesystem::exists(path2)) {
+            return path2;
+        }
+    } else {
+        // Other variants are "platform_config_X.txt"
+        std::string path = base_path + "platform_config_" + std::to_string(variant) + ".txt";
+        if (std::filesystem::exists(path)) {
+            return path;
+        }
+    }
+    
+    return ""; // File doesn't exist
+}
+
+bool LevelSelector::LoadSelectedLevel(std::vector<Platform>& platforms) {
+    std::string level_path = GetLevelPath(selected_level, selected_variant);
+    
+    if (level_path.empty()) {
+        std::cout << "Level " << selected_level << "-" << selected_variant << " does not exist!" << std::endl;
+        return false;
+    }
+    
+    return LoadLevelConfig(level_path, platforms);
+}
+
+bool LevelSelector::LoadLevelConfig(const std::string& filepath, std::vector<Platform>& platforms) {
+    std::ifstream file(filepath);
+    
+    if (!file.is_open()) {
+        std::cerr << "Failed to open " << filepath << std::endl;
+        return false;
+    }
+    
+    platforms.clear();
+    
+    std::string line;
+    int platform_count = 0;
+    while (std::getline(file, line)) {
+        if (line.empty()) continue;
+        
+        char type;
+        float center_x, center_y, width, height, rotation;
+        
+        if (sscanf(line.c_str(), "%c, %f, %f, %f, %f, %f", 
+                   &type, &center_x, &center_y, &width, &height, &rotation) == 6) {
+            if (type == 'R') {
+                Vector2 pos = { center_x, center_y };
+                Vector2 size = { width, height };
+                
+                Platform new_platform(pos, size, rotation);
+                new_platform.id = platform_count;
+                platforms.push_back(new_platform);
+                platform_count++;
+                std::cout << "Loaded platform " << platform_count << ": pos(" << pos.x << "," << pos.y 
+                         << ") size(" << size.x << "," << size.y << ") rot(" << rotation << ")" << std::endl;
+            }
+        } else {
+            std::cout << "Failed to parse line: " << line << std::endl;
+        }
+    }
+    
+    std::cout << "Level configuration loaded from " << filepath << " - " << platform_count << " platforms loaded" << std::endl;
+    file.close();
+    return true;
+}
