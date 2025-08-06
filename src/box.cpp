@@ -460,6 +460,8 @@ void Box::SetPredictionStartPosition() {
         local_bottom_right.x * cos_rot - local_bottom_right.y * sin_rot + position.x,
         local_bottom_right.x * sin_rot + local_bottom_right.y * cos_rot + position.y
     };
+
+    // move prediction point up slightly
     
     has_prediction_start = true;
     multi_platform_ghost_calculated = false;
@@ -667,14 +669,14 @@ void Box::DrawMultiPlatformGhost(const std::vector<Platform>& platforms) {
     if (!trajectory_segments.empty()) {
         float border = 2.0f;
         DrawRectanglePro(
-            (Rectangle){ final_ghost_position.x, final_ghost_position.y, size.x, size.y }, 
+            (Rectangle){ final_ghost_position.x + size.x * 0.5f, final_ghost_position.y - size.y * 0.5f, size.x, size.y }, 
             (Vector2){ size.x * 0.5f, size.y * 0.5f }, 
             0.0f,
             (Color){255, 255, 255, 100}
         );
         
         DrawRectanglePro(
-            (Rectangle){ final_ghost_position.x, final_ghost_position.y, size.x - border * 2, size.y - border * 2 }, 
+            (Rectangle){ final_ghost_position.x + size.x * 0.5f, final_ghost_position.y - size.y * 0.5f, size.x - border * 2, size.y - border * 2 }, 
             (Vector2){ (size.x - border * 2) * 0.5f, (size.y - border * 2) * 0.5f }, 
             0.0f,
             (Color){color.r, color.g, color.b, 80}
@@ -1315,6 +1317,7 @@ void Box::CalculateMultiReferenceFrameTrajectory(const std::vector<Platform>& pl
     multi_platform_ghost_calculated = !trajectory_segments.empty();
 }
 
+// NEW: Calculate projectile motion trajectory
 Vector2 Box::CalculateProjectileTrajectory(Vector2 launch_position, Vector2 launch_velocity, const std::vector<Platform>& platforms) {
     // Projectile motion parameters
     float dt = 0.02f; // Smaller time step for more accurate trajectory
@@ -1365,7 +1368,10 @@ Vector2 Box::CalculateProjectileTrajectory(Vector2 launch_position, Vector2 laun
                     // Store projectile path for drawing
                     projectile_trajectory_points = projectile_path;
                     
-                    return intersection;
+                    // CONTINUE SIMULATION: Calculate movement along the landing platform
+                    Vector2 final_position = CalculatePostLandingTrajectory(intersection, current_vel, platform);
+                    
+                    return final_position;
                 }
             }
         }
@@ -1410,6 +1416,92 @@ Vector2 Box::CalculateProjectileTrajectory(Vector2 launch_position, Vector2 laun
     // If no collision found, return the final position
     projectile_trajectory_points = projectile_path;
     return current_pos;
+}
+
+// NEW: Calculate trajectory after landing on a platform
+Vector2 Box::CalculatePostLandingTrajectory(Vector2 landing_position, Vector2 landing_velocity, const Platform& landing_platform) {
+    // Calculate the velocity component along the platform surface
+    float platform_angle = landing_platform.rotation * DEG2RAD;
+    Vector2 platform_direction = { cos(platform_angle), sin(platform_angle) };
+    
+    // Project landing velocity onto platform direction to get speed along platform
+    float speed_along_platform = Vector2DotProduct(landing_velocity, platform_direction);
+    
+    // Make sure we're moving in the positive platform direction
+    if (speed_along_platform < 0) {
+        speed_along_platform = fabs(speed_along_platform);
+    }
+    
+    // Calculate deceleration on the platform (same physics as normal platform movement)
+    float platform_slope_angle = landing_platform.rotation * DEG2RAD;
+    float gravity_component = gravity * sin(platform_slope_angle);
+    float friction_component = mu_kinetic * gravity * cos(fabs(platform_slope_angle));
+    float net_deceleration = friction_component - gravity_component;
+    
+    // If net deceleration is negative or zero, box will accelerate or maintain speed
+    if (net_deceleration <= 0) {
+        // Box continues to end of platform
+        Vector2 platform_end = GetRightEndOfPlatform(landing_platform);
+        
+        // Add platform segment
+        TrajectorySegment platform_segment;
+        platform_segment.start_position = landing_position;
+        platform_segment.end_position = platform_end;
+        platform_segment.platform = &landing_platform;
+        platform_segment.distance = Vector2Distance(landing_position, platform_end);
+        trajectory_segments.push_back(platform_segment);
+        
+        return platform_end;
+    }
+    
+    // Calculate stopping distance using kinematic equation: v² = u² - 2as
+    // Final velocity = 0, so: 0 = u² - 2as → s = u²/(2a)
+    float stopping_distance = (speed_along_platform * speed_along_platform) / (2.0f * net_deceleration);
+    
+    // Calculate stopping position along platform
+    Vector2 platform_direction_normalized = Vector2Normalize(platform_direction);
+    Vector2 stopping_position = Vector2Add(landing_position, Vector2Scale(platform_direction_normalized, stopping_distance));
+    
+    // Check if stopping position is beyond the end of the platform
+    Vector2 platform_end = GetRightEndOfPlatform(landing_platform);
+    float distance_to_end = Vector2Distance(landing_position, platform_end);
+    
+    Vector2 final_position;
+    if (stopping_distance >= distance_to_end) {
+        // Box doesn't stop on this platform - goes to the end
+        final_position = platform_end;
+        
+        // Calculate remaining velocity at platform end
+        float distance_traveled = distance_to_end;
+        float velocity_lost_squared = 2.0f * net_deceleration * distance_traveled;
+        float remaining_velocity_squared = speed_along_platform * speed_along_platform - velocity_lost_squared;
+        float remaining_velocity = (remaining_velocity_squared > 0) ? sqrt(remaining_velocity_squared) : 0.0f;
+        
+        // Add platform segment
+        TrajectorySegment platform_segment;
+        platform_segment.start_position = landing_position;
+        platform_segment.end_position = final_position;
+        platform_segment.platform = &landing_platform;
+        platform_segment.distance = distance_traveled;
+        trajectory_segments.push_back(platform_segment);
+        
+        // If there's remaining velocity, could potentially jump to another platform
+        // For now, just stop at the end of this platform
+        return final_position;
+    } else {
+        // Box stops on this platform
+        final_position = stopping_position;
+        
+        // Add platform segment
+        TrajectorySegment platform_segment;
+        platform_segment.start_position = landing_position;
+        platform_segment.end_position = final_position;
+        platform_segment.platform = &landing_platform;
+        platform_segment.distance = stopping_distance;
+        trajectory_segments.push_back(platform_segment);
+        
+        return final_position;
+    }
 }
 
 // Helper function to check if trajectory segment crosses platform

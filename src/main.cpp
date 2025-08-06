@@ -244,9 +244,9 @@ int main(int argc, char* argv[]) {
         }
 
         if (IsKeyPressed(KEY_SEMICOLON)){
-            box.mu_kinetic += 0.1f;
-        } else if (IsKeyPressed(KEY_APOSTROPHE)){
             box.mu_kinetic -= 0.1f;
+        } else if (IsKeyPressed(KEY_APOSTROPHE)){
+            box.mu_kinetic += 0.1f;
         }
 
         if (IsKeyPressed(KEY_MINUS)){
