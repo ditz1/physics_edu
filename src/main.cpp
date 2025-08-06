@@ -104,6 +104,8 @@ int main(int argc, char* argv[]) {
     Texture2D gorilla_tex = LoadTexture("../assets/gorilla1.png");
     Texture2D bananas_tex = LoadTexture("../assets/bananas.png");
 
+    float dt_modifier = 1.0f;
+
 
     //DisableCursor();
     SetTargetFPS(60);
@@ -162,6 +164,7 @@ int main(int argc, char* argv[]) {
   
 
     while (!WindowShouldClose()) {
+        dt = 1.0f / (30.0f * dt_modifier);
 
 
         bool was_grabbed_last_frame = box.is_grabbed;
@@ -244,6 +247,12 @@ int main(int argc, char* argv[]) {
             box.mu_kinetic += 0.1f;
         } else if (IsKeyPressed(KEY_APOSTROPHE)){
             box.mu_kinetic -= 0.1f;
+        }
+
+        if (IsKeyPressed(KEY_MINUS)){
+            dt_modifier += 0.5f;
+        } else if (IsKeyPressed(KEY_EQUAL)){
+            dt_modifier -= 0.5f;
         }
 
         if (IsKeyPressed(KEY_E)){
