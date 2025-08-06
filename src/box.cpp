@@ -635,68 +635,26 @@ void Box::DrawMultiPlatformGhost(const std::vector<Platform>& platforms) {
         multi_platform_ghost_calculated = true;
     }
     
-    // Draw debug boxes for ACTUAL reference frames used in calculation
-    Vector2 debug_start_position = prediction_start_position;
-    const Platform* debug_current_slope = nullptr;
-    
-    // Find starting platform (same logic as calculation)
-    for (const auto& platform : platforms) {
-        if (IsPointOnPlatform(debug_start_position, platform)) {
-            debug_current_slope = &platform;
-            break;
-        }
-    }
-    
-    // FIXED: Proper non-overlapping reference frames
-    std::vector<const Platform*> sorted_platforms;
-    for (const auto& platform : platforms) {
-        sorted_platforms.push_back(&platform);
-    }
-    
-    // Sort by leftmost x coordinate
-    std::sort(sorted_platforms.begin(), sorted_platforms.end(), 
-        [](const Platform* a, const Platform* b) {
-            float a_left = std::min(a->top_left.x, a->top_right.x);
-            float b_left = std::min(b->top_left.x, b->top_right.x);
-            return a_left < b_left;
-        });
-    
-    // Draw exactly 2 NON-OVERLAPPING reference frames
-    if (sorted_platforms.size() >= 4) {
-        // Frame 1: First slope + First horizontal (platforms 0,1)
-        const Platform* slope1 = sorted_platforms[0];
-        const Platform* horiz1 = sorted_platforms[1];
-        
-        float frame1_min_x = std::min({slope1->top_left.x, slope1->top_right.x, horiz1->top_left.x, horiz1->top_right.x});
-        float frame1_max_x = std::max({slope1->top_left.x, slope1->top_right.x, horiz1->top_left.x, horiz1->top_right.x});
-        float frame1_min_y = std::min({slope1->top_left.y, slope1->top_right.y, horiz1->top_left.y, horiz1->top_right.y}) - 50;
-        float frame1_max_y = std::max({slope1->top_left.y, slope1->top_right.y, horiz1->top_left.y, horiz1->top_right.y}) + 50;
-        
-        DrawRectangleLines(frame1_min_x - 10, frame1_min_y, frame1_max_x - frame1_min_x + 20, frame1_max_y - frame1_min_y, PURPLE);
-        DrawText("Frame 1", frame1_min_x, frame1_min_y - 20, 16, PURPLE);
-        
-        // Frame 2: Second slope + Second horizontal (platforms 2,3)  
-        const Platform* slope2 = sorted_platforms[2];
-        const Platform* horiz2 = sorted_platforms[3];
-        
-        float frame2_min_x = std::min({slope2->top_left.x, slope2->top_right.x, horiz2->top_left.x, horiz2->top_right.x});
-        float frame2_max_x = std::max({slope2->top_left.x, slope2->top_right.x, horiz2->top_left.x, horiz2->top_right.x});
-        float frame2_min_y = std::min({slope2->top_left.y, slope2->top_right.y, horiz2->top_left.y, horiz2->top_right.y}) - 50;
-        float frame2_max_y = std::max({slope2->top_left.y, slope2->top_right.y, horiz2->top_left.y, horiz2->top_right.y}) + 50;
-        
-        DrawRectangleLines(frame2_min_x - 10, frame2_min_y, frame2_max_x - frame2_min_x + 20, frame2_max_y - frame2_min_y, MAGENTA);
-        DrawText("Frame 2", frame2_min_x, frame2_min_y - 20, 16, MAGENTA);
-    }
-    
     // Draw all trajectory segments
     for (size_t i = 0; i < trajectory_segments.size(); i++) {
         const auto& segment = trajectory_segments[i];
         
-        // Choose color based on platform type
-        Color line_color = (abs(segment.platform->rotation) > 5.0f) ? ORANGE : YELLOW;
-        
-        // Draw trajectory line
-        DrawLineEx(segment.start_position, segment.end_position, 5.0f, line_color);
+        if (segment.platform == nullptr) {
+            // This is a projectile motion segment - draw the curved path
+            if (!projectile_trajectory_points.empty()) {
+                for (size_t j = 1; j < projectile_trajectory_points.size(); j++) {
+                    DrawLineEx(projectile_trajectory_points[j-1], projectile_trajectory_points[j], 3.0f, MAGENTA);
+                }
+                // Draw projectile path points
+                for (const auto& point : projectile_trajectory_points) {
+                    DrawCircleV(point, 2.0f, PINK);
+                }
+            }
+        } else {
+            // Normal platform segment
+            Color line_color = (abs(segment.platform->rotation) > 5.0f) ? ORANGE : YELLOW;
+            DrawLineEx(segment.start_position, segment.end_position, 5.0f, line_color);
+        }
         
         // Draw transition points
         DrawCircleV(segment.end_position, 5, GREEN);
@@ -1166,9 +1124,6 @@ void Box::CalculateMultiReferenceFrameTrajectory(const std::vector<Platform>& pl
             return a_left < b_left;
         });
     
-    // Minimal debug output
-    // Multi-platform calculation
-    
     // CRITICAL FIX: Find which reference frame the box is actually on
     int starting_frame = -1;
     for (int frame = 0; frame < 2 && frame * 2 + 1 < (int)sorted_platforms.size(); frame++) {
@@ -1197,25 +1152,26 @@ void Box::CalculateMultiReferenceFrameTrajectory(const std::vector<Platform>& pl
         const Platform* horizontal_platform = (frame * 2 + 1 < (int)sorted_platforms.size()) ? 
                                             sorted_platforms[frame * 2 + 1] : nullptr;
         
-        if (!slope_platform || !horizontal_platform) {
+        if (!slope_platform) {
             final_ghost_position = current_start_position;
             break;
         }
         
         // EXACT SAME CALCULATION AS ORIGINAL WORKING CODE  
         Vector2 intersect;
-        bool found_intersection = CheckCollisionLines(slope_platform->top_left, slope_platform->top_right, 
-                               horizontal_platform->top_left, horizontal_platform->top_right, &intersect);
-        
+        bool found_intersection = false;
         Vector2 transition_point;
+        
+        if (horizontal_platform) {
+            found_intersection = CheckCollisionLines(slope_platform->top_left, slope_platform->top_right, 
+                                   horizontal_platform->top_left, horizontal_platform->top_right, &intersect);
+        }
+        
         if (found_intersection) {
             transition_point = intersect;
         } else {
-            // Use connection point like original
-            Vector2 current_right = GetRightEndOfPlatform(*slope_platform);
-            Vector2 next_left = (horizontal_platform->top_left.x < horizontal_platform->top_right.x) ? 
-                               horizontal_platform->top_left : horizontal_platform->top_right;
-            transition_point = current_right; // Use slope end as transition
+            // Use right end of slope as launch point
+            transition_point = GetRightEndOfPlatform(*slope_platform);
         }
         
         // CRITICAL FIX: Calculate initial speed along THIS slope direction (matches real physics)
@@ -1265,78 +1221,212 @@ void Box::CalculateMultiReferenceFrameTrajectory(const std::vector<Platform>& pl
         slope_segment.distance = slope_distance;
         trajectory_segments.push_back(slope_segment);
         
-        // Calculate horizontal segment (IMPROVED to match real physics)
-        float slope_angle_horiz = horizontal_platform->rotation * DEG2RAD;
+        // NEW: Check if this is a jump scenario
+        bool is_jump = false;
+        Vector2 launch_velocity = {0, 0};
         
-        // FRICTION FIX: Use same friction calculation as real physics
-        float horizontal_deceleration = mu_kinetic * gravity * cos(fabs(slope_angle_horiz));
-        
-        // Add slope component if platform isn't perfectly horizontal
-        float gravity_component = gravity * sin(slope_angle_horiz);
-        float net_deceleration = horizontal_deceleration - gravity_component;
-        
-        // Prevent negative deceleration (box would accelerate)
-        if (net_deceleration <= 0) {
-            // Box will accelerate/maintain speed - goes to end of platform
-            net_deceleration = 0.001f; // Small value to prevent division by zero
+        if (!horizontal_platform || !found_intersection) {
+            // No next platform or no intersection = jump scenario
+            is_jump = true;
+            
+            // Calculate launch velocity from slope
+            float slope_angle = slope_platform->rotation * DEG2RAD;
+            Vector2 slope_direction = { cos(slope_angle), sin(slope_angle) };
+            launch_velocity = Vector2Scale(slope_direction, slope_final_velocity);
         }
         
-        float horizontal_stopping_distance = (slope_final_velocity * slope_final_velocity) / (2.0f * net_deceleration);
+        if (is_jump) {
+            // Calculate projectile motion trajectory
+            Vector2 projectile_segments = CalculateProjectileTrajectory(transition_point, launch_velocity, platforms);
+            final_ghost_position = projectile_segments;
+            break; // End trajectory calculation after jump
+        }
         
-        Vector2 horizontal_direction = Vector2Normalize(Vector2Subtract(horizontal_platform->top_right, horizontal_platform->top_left));
-        Vector2 horizontal_end_position = Vector2Add(transition_point, Vector2Scale(horizontal_direction, horizontal_stopping_distance));
-        
-        // Check if we go past the end of horizontal platform
-        Vector2 platform_right_end = GetRightEndOfPlatform(*horizontal_platform);
-        float max_horizontal_distance = Vector2Distance(transition_point, platform_right_end);
-        float actual_horizontal_distance = horizontal_stopping_distance;
-        float remaining_velocity = 0.0f;
-        
-        if (horizontal_stopping_distance > max_horizontal_distance) {
-            // Box doesn't stop on this platform - calculate remaining velocity
-            horizontal_end_position = platform_right_end;
-            actual_horizontal_distance = max_horizontal_distance;
+        // Continue with existing horizontal platform logic if not jumping
+        if (horizontal_platform) {
+            float slope_angle_horiz = horizontal_platform->rotation * DEG2RAD;
             
-            // Energy conservation: v² = u² - 2as (deceleration removes energy)
-            float velocity_lost_squared = 2.0f * net_deceleration * actual_horizontal_distance;
-            float remaining_velocity_squared = slope_final_velocity * slope_final_velocity - velocity_lost_squared;
-            remaining_velocity = (remaining_velocity_squared > 0) ? sqrt(remaining_velocity_squared) : 0.0f;
+            // FRICTION FIX: Use same friction calculation as real physics
+            float horizontal_deceleration = mu_kinetic * gravity * cos(fabs(slope_angle_horiz));
             
-            // PHYSICS FIX: Match real friction behavior - stop if very low velocity
-            if (remaining_velocity < 0.5f) {
+            // Add slope component if platform isn't perfectly horizontal
+            float gravity_component = gravity * sin(slope_angle_horiz);
+            float net_deceleration = horizontal_deceleration - gravity_component;
+            
+            // Prevent negative deceleration (box would accelerate)
+            if (net_deceleration <= 0) {
+                // Box will accelerate/maintain speed - goes to end of platform
+                net_deceleration = 0.001f; // Small value to prevent division by zero
+            }
+            
+            float horizontal_stopping_distance = (slope_final_velocity * slope_final_velocity) / (2.0f * net_deceleration);
+            
+            Vector2 horizontal_direction = Vector2Normalize(Vector2Subtract(horizontal_platform->top_right, horizontal_platform->top_left));
+            Vector2 horizontal_end_position = Vector2Add(transition_point, Vector2Scale(horizontal_direction, horizontal_stopping_distance));
+            
+            // Check if we go past the end of horizontal platform
+            Vector2 platform_right_end = GetRightEndOfPlatform(*horizontal_platform);
+            float max_horizontal_distance = Vector2Distance(transition_point, platform_right_end);
+            float actual_horizontal_distance = horizontal_stopping_distance;
+            float remaining_velocity = 0.0f;
+            
+            if (horizontal_stopping_distance > max_horizontal_distance) {
+                // Box doesn't stop on this platform - calculate remaining velocity
+                horizontal_end_position = platform_right_end;
+                actual_horizontal_distance = max_horizontal_distance;
+                
+                // Energy conservation: v² = u² - 2as (deceleration removes energy)
+                float velocity_lost_squared = 2.0f * net_deceleration * actual_horizontal_distance;
+                float remaining_velocity_squared = slope_final_velocity * slope_final_velocity - velocity_lost_squared;
+                remaining_velocity = (remaining_velocity_squared > 0) ? sqrt(remaining_velocity_squared) : 0.0f;
+                
+                // PHYSICS FIX: Match real friction behavior - stop if very low velocity
+                if (remaining_velocity < 0.5f) {
+                    remaining_velocity = 0.0f;
+                }
+                
+                // Box continues to next platform
+            } else {
+                // Box stops on this platform
                 remaining_velocity = 0.0f;
             }
             
-            // Box continues to next platform
-        } else {
-            // Box stops on this platform
-            remaining_velocity = 0.0f;
+            // Add horizontal segment
+            TrajectorySegment horizontal_segment;
+            horizontal_segment.start_position = transition_point;
+            horizontal_segment.end_position = horizontal_end_position;
+            horizontal_segment.platform = horizontal_platform;
+            horizontal_segment.distance = actual_horizontal_distance;
+            trajectory_segments.push_back(horizontal_segment);
+            
+            // Stop if no remaining velocity
+            if (remaining_velocity < 0.1f) {
+                final_ghost_position = horizontal_end_position;
+                break;
+            }
+            
+            // Set up for next reference frame
+            current_speed = remaining_velocity;
+            current_start_position = horizontal_end_position; // Continue from end of horizontal platform
         }
-        
-        // Add horizontal segment
-        TrajectorySegment horizontal_segment;
-        horizontal_segment.start_position = transition_point;
-        horizontal_segment.end_position = horizontal_end_position;
-        horizontal_segment.platform = horizontal_platform;
-        horizontal_segment.distance = actual_horizontal_distance;
-        trajectory_segments.push_back(horizontal_segment);
-        
-        // Stop if no remaining velocity
-        if (remaining_velocity < 0.1f) {
-            final_ghost_position = horizontal_end_position;
-            break;
-        }
-        
-        // Set up for next reference frame
-        current_speed = remaining_velocity;
-        current_start_position = horizontal_end_position; // Continue from end of horizontal platform
-        
-        // Continue with next frame in sequence
-        // The sorted platform logic will handle the next frame automatically
     }
     
     // Final result - minimal output
     multi_platform_ghost_calculated = !trajectory_segments.empty();
+}
+
+Vector2 Box::CalculateProjectileTrajectory(Vector2 launch_position, Vector2 launch_velocity, const std::vector<Platform>& platforms) {
+    // Projectile motion parameters
+    float dt = 0.02f; // Smaller time step for more accurate trajectory
+    Vector2 current_pos = launch_position;
+    Vector2 current_vel = launch_velocity;
+    float max_time = 10.0f; // Maximum simulation time to prevent infinite loops
+    float time = 0.0f;
+    
+    // Store projectile trajectory points for drawing
+    std::vector<Vector2> projectile_path;
+    projectile_path.push_back(current_pos);
+    
+    while (time < max_time) {
+        // Store previous position for collision checking
+        Vector2 prev_pos = current_pos;
+        
+        // Update velocity first (gravity affects velocity)
+        current_vel.y += gravity * dt;
+        
+        // Then update position using current velocity
+        current_pos = Vector2Add(current_pos, Vector2Scale(current_vel, dt));
+        
+        // Add point to trajectory path every few iterations for smoother drawing
+        if ((int)(time / dt) % 3 == 0) { // Every 3rd point
+            projectile_path.push_back(current_pos);
+        }
+        
+        // Check for collision with any platform
+        for (const auto& platform : platforms) {
+            // Check if trajectory crosses platform top surface
+            Vector2 intersection;
+            bool crosses_platform = CheckCollisionLines(prev_pos, current_pos, platform.top_left, platform.top_right, &intersection);
+            
+            if (crosses_platform) {
+                // Make sure we're hitting the platform from above
+                if (prev_pos.y <= intersection.y && current_vel.y > 0) {
+                    // Add final point to trajectory
+                    projectile_path.push_back(intersection);
+                    
+                    // Add projectile segment to trajectory
+                    TrajectorySegment projectile_segment;
+                    projectile_segment.start_position = launch_position;
+                    projectile_segment.end_position = intersection;
+                    projectile_segment.platform = nullptr; // No platform for projectile motion
+                    projectile_segment.distance = Vector2Distance(launch_position, intersection);
+                    trajectory_segments.push_back(projectile_segment);
+                    
+                    // Store projectile path for drawing
+                    projectile_trajectory_points = projectile_path;
+                    
+                    return intersection;
+                }
+            }
+        }
+        
+        // Check if projectile hits ground (screen bottom)
+        if (current_pos.y >= GetScreenHeight() - 10) { // Small buffer from bottom
+            Vector2 ground_collision = { current_pos.x, (float)GetScreenHeight() - 10 };
+            projectile_path.push_back(ground_collision);
+            
+            // Add projectile segment
+            TrajectorySegment projectile_segment;
+            projectile_segment.start_position = launch_position;
+            projectile_segment.end_position = ground_collision;
+            projectile_segment.platform = nullptr;
+            projectile_segment.distance = Vector2Distance(launch_position, ground_collision);
+            trajectory_segments.push_back(projectile_segment);
+            
+            // Store projectile path for drawing
+            projectile_trajectory_points = projectile_path;
+            
+            return ground_collision;
+        }
+        
+        // Check if projectile goes off screen horizontally
+        if (current_pos.x < 0 || current_pos.x > GetScreenWidth()) {
+            projectile_path.push_back(current_pos);
+            
+            TrajectorySegment projectile_segment;
+            projectile_segment.start_position = launch_position;
+            projectile_segment.end_position = current_pos;
+            projectile_segment.platform = nullptr;
+            projectile_segment.distance = Vector2Distance(launch_position, current_pos);
+            trajectory_segments.push_back(projectile_segment);
+            
+            projectile_trajectory_points = projectile_path;
+            return current_pos;
+        }
+        
+        time += dt;
+    }
+    
+    // If no collision found, return the final position
+    projectile_trajectory_points = projectile_path;
+    return current_pos;
+}
+
+// Helper function to check if trajectory segment crosses platform
+bool Box::CheckTrajectoryPlatformCollision(Vector2 start_pos, Vector2 end_pos, const Platform& platform) {
+    // Check if the trajectory line segment intersects with the platform top surface
+    Vector2 intersection;
+    return CheckCollisionLines(start_pos, end_pos, platform.top_left, platform.top_right, &intersection);
+}
+
+// Helper function to find exact collision point on platform
+Vector2 Box::FindTrajectoryCollisionPoint(Vector2 start_pos, Vector2 end_pos, const Platform& platform) {
+    Vector2 intersection;
+    if (CheckCollisionLines(start_pos, end_pos, platform.top_left, platform.top_right, &intersection)) {
+        return intersection;
+    }
+    // Fallback to end position if no intersection found
+    return end_pos;
 }
 
 std::vector<Box::PlatformPair> Box::FindConnectedPlatformPairs(const std::vector<Platform>& platforms, Vector2 start_position) {

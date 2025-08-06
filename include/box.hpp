@@ -38,6 +38,11 @@ public:
     std::vector<TrajectorySegment> trajectory_segments;
     Vector2 final_ghost_position;
     bool multi_platform_ghost_calculated = false;
+    std::vector<Vector2> projectile_trajectory_points; // Store points for drawing projectile path
+    
+    Vector2 CalculateProjectileTrajectory(Vector2 launch_position, Vector2 launch_velocity, const std::vector<Platform>& platforms);
+    bool CheckTrajectoryPlatformCollision(Vector2 start_pos, Vector2 end_pos, const Platform& platform);
+    Vector2 FindTrajectoryCollisionPoint(Vector2 start_pos, Vector2 end_pos, const Platform& platform);
 
     void Update(float dt, const std::vector<Platform>& platforms = {});
     void Draw() override;
