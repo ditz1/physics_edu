@@ -221,6 +221,9 @@ bool Box::CheckAndHandleTransition(const std::vector<Platform>& platforms) {
     
     const Platform& current_platform = platforms[current_platform_id];
     
+    // NEW: Check if this is an upward ramp (negative rotation means upward slope)
+    bool is_upward_ramp = current_platform.rotation < -5.0f; // Threshold for upward slopes
+    
     // Calculate the RIGHT BOTTOM CORNER of the box
     float box_rotation_rad = rotation * DEG2RAD;
     float cos_rot = cosf(box_rotation_rad);
@@ -239,11 +242,25 @@ bool Box::CheckAndHandleTransition(const std::vector<Platform>& platforms) {
     Vector2 current_right_end = GetRightEndOfPlatform(current_platform);
     float distance_to_right_end = Vector2Distance(box_right_corner, current_right_end);
     
-    // Threshold for transition detection - when the right corner gets close
-    float transition_threshold = 20.0f; // Larger threshold for more reliable transitions
+    // Threshold for transition detection
+    float transition_threshold = 20.0f;
     
     if (distance_to_right_end < transition_threshold && velocity.x > 0) {
-        // SPATIAL APPROACH: Find next platform based on position, not array index
+        // NEW: For upward ramps, allow the box to launch off instead of teleporting
+        if (is_upward_ramp) {
+            // Check if box has enough upward velocity to launch
+            if (velocity.y < -1.0f) { // Negative y velocity means moving upward
+                // Let the box launch - stop collision detection
+                is_colliding = false;
+                current_platform_id = -1;
+                // Don't reset prediction start - let it continue in projectile motion
+                return true; // Transition handled by launching
+            }
+            // If not enough upward velocity, box will just slide off the end
+            // Fall through to normal transition logic
+        }
+        
+        // EXISTING LOGIC for downward/horizontal platforms
         const Platform* next_platform = nullptr;
         
         // Get the right end of current platform
@@ -253,7 +270,7 @@ bool Box::CheckAndHandleTransition(const std::vector<Platform>& platforms) {
         float best_distance = std::numeric_limits<float>::max();
         
         for (size_t i = 0; i < platforms.size(); i++) {
-            if ((int)i == current_platform_id) continue; // Skip current platform
+            if ((int)i == current_platform_id) continue;
             
             const Platform& candidate = platforms[i];
             
@@ -279,12 +296,19 @@ bool Box::CheckAndHandleTransition(const std::vector<Platform>& platforms) {
             }
         }
         
-        if (!next_platform) {
-            return false; // No suitable next platform found
+        // NEW: If no next platform found and this is an upward ramp, launch the box
+        if (!next_platform && is_upward_ramp) {
+            is_colliding = false;
+            current_platform_id = -1;
+            return true; // Let box continue in projectile motion
         }
         
+        if (!next_platform) {
+            return false; // No suitable next platform found for regular platforms
+        }
+        
+        // EXISTING transition logic for connected platforms
         if (next_platform) {
-            
             Vector2 transition_point;
             bool has_intersection = CheckCollisionLines(
                 current_platform.top_left, current_platform.top_right,
@@ -309,7 +333,7 @@ bool Box::CheckAndHandleTransition(const std::vector<Platform>& platforms) {
                 float next_slope_angle = next_platform->rotation * DEG2RAD;
                 Vector2 next_slope_direction = { cos(next_slope_angle), sin(next_slope_angle) };
                 
-                // Preserve speed, redirect along new platform - NO energy loss
+                // Preserve speed, redirect along new platform
                 velocity = Vector2Scale(next_slope_direction, current_speed);
                 rotation = next_platform->rotation;
                 
