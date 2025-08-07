@@ -18,9 +18,27 @@ void Platform::Draw() {
         BEIGE
     );
 
-    // FIXED: Add null check before using log_texture
+    // UPDATED: Calculate scale to stretch log texture to fit platform
     if (log_texture != nullptr) {
-        DrawTextureEx(*log_texture, (Vector2){position.x, position.y}, rotation, 5.0f, WHITE);
+        // Calculate scale factors for width and height
+        float scale_x = size.x / log_texture->width;
+        float scale_y = size.y / log_texture->height;
+        
+        // Position the texture at the platform center, accounting for scaling
+        Vector2 texture_position = {
+            position.x - (log_texture->width * scale_x) * 0.5f,
+            position.y - (log_texture->height * scale_y) * 0.5f
+        };
+        
+        // Draw texture stretched to platform size with rotation
+        DrawTexturePro(
+            *log_texture,
+            (Rectangle){0, 0, (float)log_texture->width, (float)log_texture->height}, // source
+            (Rectangle){position.x, position.y - (size.y * 0.1f), size.x, size.y * 1.1f}, // destination
+            (Vector2){size.x * 0.5f, size.y * 0.5f}, // origin at center
+            rotation,
+            WHITE
+        );
     }
 
     // Calculate rotated top-left and top-right corners

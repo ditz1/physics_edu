@@ -103,7 +103,7 @@ int main(int argc, char* argv[]) {
     SetConfigFlags(FLAG_WINDOW_RESIZABLE);
     InitWindow(screenWidth, screenHeight, "physics engine");
 
-    Texture2D gorilla_tex = LoadTexture("../assets/gorilla1.png");
+    Texture2D gorilla_tex = LoadTexture("../assets/gorilla.png");
     Texture2D bananas_tex = LoadTexture("../assets/bananas.png");
     Texture2D log_tex = LoadTexture("../assets/log.png");
 
