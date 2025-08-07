@@ -14,8 +14,8 @@ endif()
 
 # Include directories
 include_directories(
-    include
-    include/raylib
+    "include"
+    "include/raylib"
 )
 
 # Add Emscripten-specific include paths
@@ -29,6 +29,10 @@ endif()
 file(GLOB SOURCES
     "src/*.cpp"
 )
+
+set(CMAKE_CXX_USE_RESPONSE_FILE_FOR_INCLUDES OFF)
+set(CMAKE_CXX_USE_RESPONSE_FILE_FOR_OBJECTS OFF)
+
 
 # Set build output directories
 set(CMAKE_BINARY_DIR "${CMAKE_CURRENT_SOURCE_DIR}/build")
