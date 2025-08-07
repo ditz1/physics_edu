@@ -338,10 +338,6 @@ int main(int argc, char* argv[]) {
                     DrawText(TextFormat("Trajectory segments: %d", (int)box.trajectory_segments.size()), 10, 160, 20, RAYWHITE);
                 }
                 
-                // Draw multi-platform ghost trajectory using reference frames
-                if (box.has_prediction_start) {
-                    box.DrawMultiPlatformGhost(all_platforms);
-                }
                 
                 // Show reference frame info
                 if (box.has_prediction_start && !box.trajectory_segments.empty()) {
@@ -356,6 +352,10 @@ int main(int argc, char* argv[]) {
                 
                 for (Platform& plat : all_platforms) {
                     plat.Draw();
+                }
+
+                if (box.has_prediction_start) {
+                    box.DrawMultiPlatformGhost(all_platforms);
                 }
 
                 DrawRectangleLinesEx(box_rect, 1.0f, GREEN);
