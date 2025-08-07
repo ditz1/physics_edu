@@ -57,10 +57,7 @@ void Box::Update(float dt, const std::vector<Platform>& platforms) {
 }
 
 void Box::Draw() {
-    // Draw with DrawRectangleV (should work)
-    //DrawRectangleV(position, size, RED);
     float border = 2.0f;
-    // Draw with DrawRectanglePro - see where it appears
     
     DrawRectanglePro(
         (Rectangle){ position.x, position.y, size.x, size.y }, 
@@ -76,7 +73,9 @@ void Box::Draw() {
         color
     );
 
+    // broken because need to account for rotation
     //DrawTextureEx(*texture, { position.x - size.x, position.y - size.y }, rotation, 0.08f, WHITE);
+    //DrawTexturePro(*texture, {0, 0, (float)texture->width, (float)texture->height}, {position.x - size.x * 0.5f, position.y - size.y * 0.5f, size.x * 1.5f, size.y * 1.5f}, {size.x * 0.5f, size.y * 0.5f}, rotation, WHITE);
     
     
     DrawCircleV(position, 5, WHITE);
