@@ -104,6 +104,7 @@ int main(int argc, char* argv[]) {
 
     Texture2D gorilla_tex = LoadTexture("../assets/gorilla1.png");
     Texture2D bananas_tex = LoadTexture("../assets/bananas.png");
+    Texture2D log_tex = LoadTexture("../assets/log.png");
 
     float dt_modifier = 1.0f;
 
@@ -219,6 +220,7 @@ int main(int argc, char* argv[]) {
             
             for (int i = 0; i < all_platforms.size(); i++) {
                 Platform& platform = all_platforms[i];
+                platform.log_texture = &log_tex;
                 
                 platform.CheckResize();
                 if (platform.is_resizing) {
@@ -396,6 +398,7 @@ int main(int argc, char* argv[]) {
 
     UnloadTexture(gorilla_tex);
     UnloadTexture(bananas_tex);
+    UnloadTexture(log_tex);
     CloseWindow();
 
     return 0;

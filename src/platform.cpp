@@ -18,6 +18,8 @@ void Platform::Draw() {
         BEIGE
     );
 
+    DrawTextureEx(*log_texture, (Vector2){position.x, position.y}, rotation, 5.0f, WHITE);
+
     // Calculate rotated top-left and top-right corners
     float cos_rot = cosf(rotation * DEG2RAD);
     float sin_rot = sinf(rotation * DEG2RAD);

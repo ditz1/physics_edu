@@ -23,6 +23,7 @@ public:
     bool is_resizing = false;
     Vector2 resize_start_size;
     Vector2 resize_start_mouse;
+    Texture2D* log_texture;
 
     void Draw() override;
     void Update(float dt) override {}
