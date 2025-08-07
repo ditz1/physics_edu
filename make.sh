@@ -9,7 +9,7 @@ if [ $# -eq 0 ] || [ "$1" = "web" ]; then
 elif [ "$1" = "native" ]; then
     mkdir -p build
     cd build
-    cmake ..
+    cmake -DCMAKE_EXPORT_COMPILE_COMMANDS=ON ..
     make
 elif [ "$1" = "clean" ]; then
     rm -rf build

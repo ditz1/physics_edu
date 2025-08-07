@@ -1,0 +1,8 @@
+CompileFlags:
+  Add:
+    - -IC:/ProgramData/mingw64/mingw64/include
+    - -IC:/ProgramData/mingw64/mingw64/include/c++/13.2.0
+    - -IC:/ProgramData/mingw64/mingw64/include/c++/13.2.0/x86_64-w64-mingw32
+    - -IC:/ProgramData/mingw64/mingw64/x86_64-w64-mingw32/include
+    - --target=x86_64-w64-mingw32
+    - -std=c++17
