@@ -11,6 +11,7 @@ public:
         this->mass = 1.0f;
         this->is_grabbed = false;
         this->rotation = rotation;
+        this->log_texture = nullptr; // Initialize to nullptr to prevent segfault
     }
     Vector2 size;
     float rotation = 0.0f;

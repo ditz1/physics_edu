@@ -56,12 +56,12 @@ void Toolbox::Draw() {
     }
 }
 
-void Toolbox::Update(float dt, std::vector<Platform>& platforms, const Box& box) {
+void Toolbox::Update(float dt, std::vector<Platform>& platforms, const Box& box, const Gorilla& gorilla) {
     if (!edit_mode) return;
     
     // save platform configuration with 'J' key
     if (IsKeyPressed(KEY_J)) {
-        SavePlatformConfiguration(platforms, box);
+        SavePlatformConfiguration(platforms, box, gorilla);
     }
     
     // toggle platform creation mode with '1' key
@@ -97,6 +97,7 @@ void Toolbox::Update(float dt, std::vector<Platform>& platforms, const Box& box)
                 };
                 
                 Platform new_platform(center, { fabs(size.x), fabs(size.y) }, 0.0f);
+                new_platform.id = platforms.size(); // Assign the next available ID
                 platforms.push_back(new_platform);
             }
             
@@ -107,7 +108,7 @@ void Toolbox::Update(float dt, std::vector<Platform>& platforms, const Box& box)
 }
 
 // THIS WILL ONLY SAVE IN EDIT MODE
-void Toolbox::SavePlatformConfiguration(const std::vector<Platform>& platforms, const Box& box) {
+void Toolbox::SavePlatformConfiguration(const std::vector<Platform>& platforms, const Box& box, const Gorilla& gorilla) {
     std::string base_filename = "platform_config";
     std::string extension = ".txt";
     std::string filename = base_filename + extension;
@@ -132,6 +133,9 @@ void Toolbox::SavePlatformConfiguration(const std::vector<Platform>& platforms, 
     // Save box position first
     file << "BOX, " << box.position.x << ", " << box.position.y << std::endl;
     
+    // Save gorilla position
+    file << "GORILLA, " << gorilla.position.x << ", " << gorilla.position.y << std::endl;
+    
     // Then save platforms
     for (const Platform& platform : platforms) {
         file << "R, " << platform.position.x << ", " << platform.position.y 
@@ -139,7 +143,7 @@ void Toolbox::SavePlatformConfiguration(const std::vector<Platform>& platforms, 
              << ", " << platform.rotation << std::endl;
     }
 
-    std::cout << "Configuration with box position saved to " << filename << std::endl;
+    std::cout << "Configuration with box and gorilla positions saved to " << filename << std::endl;
     
     file.close();
 }

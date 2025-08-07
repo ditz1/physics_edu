@@ -150,7 +150,7 @@ void Box::CheckPlatformCollisionTwoLine(const std::vector<Platform>& platforms) 
             if (boxBottom.y >= closestPointOnPlatform.y - 5.0f && distance < 10.0f) {
                 // PRIORITIZATION FIX: If box is moving rightward, prefer platforms to the right
                 bool is_preferred = true;
-                if (velocity.x > 0.1f && is_colliding && current_platform_id >= 0) {
+                if (velocity.x > 0.1f && is_colliding && current_platform_id >= 0 && current_platform_id < (int)platforms.size()) {
                     // Check if this platform is in the direction of movement
                     Vector2 platform_center = Vector2Add(platform.top_left, Vector2Scale(platformDir, 0.5f));
                     if (platform_center.x < position.x - 10.0f) {
@@ -163,14 +163,15 @@ void Box::CheckPlatformCollisionTwoLine(const std::vector<Platform>& platforms) 
                 
                 if (effective_distance < closest_distance) {
                     closest_distance = effective_distance;
-                    closest_platform_id = i;
+                    closest_platform_id = (int)i;  // Cast to int for consistency
                     closest_point = closestPointOnPlatform;
                 }
             }
         }
     }
     
-    if (closest_platform_id >= 0) {
+    // FIXED: Add proper bounds checking before accessing platforms array
+    if (closest_platform_id >= 0 && closest_platform_id < (int)platforms.size()) {
         // Collision detected
         bool isNewCollision = !was_colliding_last_frame;
         bool isPlatformTransition = (was_colliding_last_frame && last_platform_id != closest_platform_id);

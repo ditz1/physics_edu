@@ -1,6 +1,7 @@
 #include "../include/raylib/raylib.h"
 #include "../include/toolbox.hpp"
 #include "../include/level_selector.hpp"
+#include "../include/gorilla.hpp"
 #include <cstring>
 
 bool edit_mode = false;
@@ -141,6 +142,11 @@ int main(int argc, char* argv[]) {
         
         all_platforms.push_back(platform);
         all_platforms.push_back(platform2);
+        
+        // Assign IDs to default platforms
+        for (int i = 0; i < all_platforms.size(); i++) {
+            all_platforms[i].id = i;
+        }
     }
 
     float dt = 1.0f / 30.0f; // Fixed time step for 60 FPS
@@ -150,6 +156,10 @@ int main(int argc, char* argv[]) {
     box.mass = 100.0f;
     box.texture = &bananas_tex;
     box.ghost_calculated = false;
+
+    // Initialize Gorilla
+    Gorilla gorilla({screenWidth - 150.0f, 480.0f});
+    gorilla.texture = &gorilla_tex;
 
     Toolbox toolbox;
     bool toolbox_active = true;
@@ -173,10 +183,10 @@ int main(int argc, char* argv[]) {
             
             // Load selected level
             if (IsKeyPressed(KEY_ENTER)) {
-                if (level_selector.LoadSelectedLevel(all_platforms, box)) {
+                if (level_selector.LoadSelectedLevel(all_platforms, box, gorilla)) {
                     level_selector.is_active = false;
                     
-                    // Box position is now loaded from file, just reset physics state
+                    // Reset physics state for both box and gorilla
                     box.velocity = { 0.0f, 0.0f };
                     box.acceleration = { 0.0f, 0.0f };
                     box.ghost_calculated = false;
@@ -187,6 +197,12 @@ int main(int argc, char* argv[]) {
                     std::cout << "Level loaded successfully!" << std::endl;
                 }
             }
+        }
+
+        // MOVED: Set texture for ALL platforms at the beginning of each frame
+        // This ensures new platforms get their texture set properly
+        for (int i = 0; i < all_platforms.size(); i++) {
+            all_platforms[i].log_texture = &log_tex;
         }
 
         // Only update game logic when level selector is not active
@@ -220,7 +236,7 @@ int main(int argc, char* argv[]) {
             
             for (int i = 0; i < all_platforms.size(); i++) {
                 Platform& platform = all_platforms[i];
-                platform.log_texture = &log_tex;
+                // REMOVED: platform.log_texture = &log_tex; (moved to top of loop)
                 
                 platform.CheckResize();
                 if (platform.is_resizing) {
@@ -252,10 +268,34 @@ int main(int argc, char* argv[]) {
                 }
             }
             
+            // Handle gorilla editing - ONLY in edit mode (same as platforms)
+            if (edit_mode) {
+                gorilla.CheckGrab();
+                if (gorilla.is_grabbed) {
+                    Vector2 mouse_position = GetMousePosition();
+                    gorilla.Grab(mouse_position);
+                }
+            }
+            
             // Delete the marked platform
             if (platform_to_delete >= 0) {
                 all_platforms.erase(all_platforms.begin() + platform_to_delete);
                 std::cout << "Deleted platform " << platform_to_delete << std::endl;
+                
+                // Reassign IDs to maintain consistency
+                for (int i = 0; i < all_platforms.size(); i++) {
+                    all_platforms[i].id = i;
+                }
+                
+                // Reset box platform tracking to prevent invalid platform ID access
+                box.current_platform_id = -1;
+                box.last_platform_id = -1;
+                box.is_colliding = false;
+                box.was_colliding_last_frame = false;
+                
+                // Clear trajectory segments to prevent dangling platform pointers
+                box.trajectory_segments.clear();
+                box.projectile_trajectory_points.clear();
                 
                 box.ghost_calculated = false;
                 box.multi_platform_ghost_calculated = false;
@@ -314,7 +354,7 @@ int main(int argc, char* argv[]) {
             }
 
             if (toolbox_active) {
-                toolbox.Update(dt, all_platforms, box);
+                toolbox.Update(dt, all_platforms, box, gorilla);
             }
         }
 
@@ -350,8 +390,6 @@ int main(int argc, char* argv[]) {
                     DrawText(TextFormat("Reference frames: %d", reference_frame_count), 10, 190, 20, RAYWHITE);
                 }
 
-                Rectangle box_rect = { screenWidth - 200, 480, 100, 100 };
-                
                 for (Platform& plat : all_platforms) {
                     plat.Draw();
                 }
@@ -360,15 +398,18 @@ int main(int argc, char* argv[]) {
                     box.DrawMultiPlatformGhost(all_platforms);
                 }
 
-                DrawRectangleLinesEx(box_rect, 1.0f, GREEN);
+                // Update and draw gorilla
+                gorilla.Update(dt);
+                gorilla.Draw();
+
                 box.Draw();
                 box.DrawVectors();
                 
                 box.DrawTwoLineCollisionDebug(all_platforms);
-                DrawTextureEx(gorilla_tex, {box_rect.x, box_rect.y}, 0.0f, 0.125f, WHITE);
 
-                if (CheckCollisionRecs(box_rect, box.Rect())){
-                    DrawText("Nice!", box_rect.x - 100, box_rect.y - 100, 20, GREEN);
+                // Check collision between box and gorilla
+                if (gorilla.CheckCollisionWithBox(box)) {
+                    DrawText("Nice!", gorilla.position.x - 50, gorilla.position.y - 100, 20, GREEN);
                 }
 
                 DrawText(TextFormat("Force: %.2f", box_force), 10, 10, 20, RAYWHITE);

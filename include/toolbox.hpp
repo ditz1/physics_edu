@@ -3,6 +3,7 @@
 #include "box.hpp"
 #include "ball_and_string.hpp"
 #include "platform.hpp"
+#include "gorilla.hpp"
 #include <fstream>  // need for file creation
 #include <iostream>
 #include <string>
@@ -12,8 +13,8 @@ extern std::vector<Platform> all_platforms;
 class Toolbox {
 public:
     void Draw();
-    void Update(float dt, std::vector<Platform>& platforms, const Box& box);
-    void SavePlatformConfiguration(const std::vector<Platform>& platforms, const Box& box);    
+    void Update(float dt, std::vector<Platform>& platforms, const Box& box, const Gorilla& gorilla);
+    void SavePlatformConfiguration(const std::vector<Platform>& platforms, const Box& box, const Gorilla& gorilla);    
     std::vector<Object*> objects;
     
     // Platform creation state

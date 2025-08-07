@@ -129,7 +129,7 @@ std::string LevelSelector::GetLevelPath(int level, int variant) {
     return ""; // File doesn't exist
 }
 
-bool LevelSelector::LoadSelectedLevel(std::vector<Platform>& platforms, Box& box) {
+bool LevelSelector::LoadSelectedLevel(std::vector<Platform>& platforms, Box& box, Gorilla& gorilla) {
     std::string level_path = GetLevelPath(selected_level, selected_variant);
     
     if (level_path.empty()) {
@@ -137,10 +137,10 @@ bool LevelSelector::LoadSelectedLevel(std::vector<Platform>& platforms, Box& box
         return false;
     }
     
-    return LoadLevelConfig(level_path, platforms, box);
+    return LoadLevelConfig(level_path, platforms, box, gorilla);
 }
 
-bool LevelSelector::LoadLevelConfig(const std::string& filepath, std::vector<Platform>& platforms, Box& box) {
+bool LevelSelector::LoadLevelConfig(const std::string& filepath, std::vector<Platform>& platforms, Box& box, Gorilla& gorilla) {
     std::ifstream file(filepath);
     
     if (!file.is_open()) {
@@ -153,7 +153,9 @@ bool LevelSelector::LoadLevelConfig(const std::string& filepath, std::vector<Pla
     std::string line;
     int platform_count = 0;
     bool box_position_loaded = false;
+    bool gorilla_position_loaded = false;
     Vector2 default_box_position = { 75.0f, (float)GetScreenHeight() / 2.0f - 200.0f }; // Default position
+    Vector2 default_gorilla_position = { (float)GetScreenWidth() - 150.0f, 480.0f }; // Default position
     
     while (std::getline(file, line)) {
         if (line.empty()) continue;
@@ -179,6 +181,27 @@ bool LevelSelector::LoadLevelConfig(const std::string& filepath, std::vector<Pla
                 }
             } else {
                 std::cout << "Failed to find comma in BOX line: " << line << std::endl;
+            }
+        }
+        // Check if this line defines a gorilla position
+        else if (line.find("GORILLA") == 0) {
+            // Parse GORILLA line: "GORILLA, x, y"
+            float gorilla_x, gorilla_y;
+            
+            size_t first_comma = line.find(',');
+            if (first_comma != std::string::npos) {
+                std::string coords = line.substr(first_comma + 1);
+                
+                if (sscanf(coords.c_str(), " %f, %f", &gorilla_x, &gorilla_y) == 2) {
+                    Vector2 gorilla_pos = { gorilla_x, gorilla_y };
+                    gorilla.position = gorilla_pos;
+                    gorilla_position_loaded = true;
+                    std::cout << "Loaded gorilla position: (" << gorilla_x << ", " << gorilla_y << ")" << std::endl;
+                } else {
+                    std::cout << "Failed to parse gorilla coordinates from: " << coords << std::endl;
+                }
+            } else {
+                std::cout << "Failed to find comma in GORILLA line: " << line << std::endl;
             }
         }
         // Otherwise check if this line defines a platform
@@ -210,6 +233,12 @@ bool LevelSelector::LoadLevelConfig(const std::string& filepath, std::vector<Pla
         box.position = default_box_position;
         box.origin_position = default_box_position;
         std::cout << "Using default box position: (" << default_box_position.x << ", " << default_box_position.y << ")" << std::endl;
+    }
+    
+    // If no gorilla position was loaded from file, use default
+    if (!gorilla_position_loaded) {
+        gorilla.position = default_gorilla_position;
+        std::cout << "Using default gorilla position: (" << default_gorilla_position.x << ", " << default_gorilla_position.y << ")" << std::endl;
     }
     
     std::cout << "Level configuration loaded from " << filepath << " - " << platform_count << " platforms loaded" << std::endl;

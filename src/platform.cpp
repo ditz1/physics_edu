@@ -18,7 +18,10 @@ void Platform::Draw() {
         BEIGE
     );
 
-    DrawTextureEx(*log_texture, (Vector2){position.x, position.y}, rotation, 5.0f, WHITE);
+    // FIXED: Add null check before using log_texture
+    if (log_texture != nullptr) {
+        DrawTextureEx(*log_texture, (Vector2){position.x, position.y}, rotation, 5.0f, WHITE);
+    }
 
     // Calculate rotated top-left and top-right corners
     float cos_rot = cosf(rotation * DEG2RAD);
