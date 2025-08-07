@@ -638,7 +638,45 @@ void Box::DrawMultiPlatformGhost(const std::vector<Platform>& platforms) {
         multi_platform_ghost_calculated = true;
     }
     
-    // Draw all trajectory segments
+    // Draw reference frame boxes (every 2 platforms = 1 frame)
+    std::vector<const Platform*> sorted_platforms;
+    for (const auto& platform : platforms) {
+        sorted_platforms.push_back(&platform);
+    }
+    
+    std::sort(sorted_platforms.begin(), sorted_platforms.end(), 
+        [](const Platform* a, const Platform* b) {
+            float a_left = std::min(a->top_left.x, a->top_right.x);
+            float b_left = std::min(b->top_left.x, b->top_right.x);
+            return a_left < b_left;
+        });
+    
+    // Draw reference frames
+    Color frame_colors[] = { PURPLE, MAGENTA, BLUE, DARKGREEN, ORANGE, PINK };
+    int num_colors = sizeof(frame_colors) / sizeof(frame_colors[0]);
+    
+    for (int frame = 0; frame * 2 + 1 < (int)sorted_platforms.size(); frame++) {
+        const Platform* slope_platform = sorted_platforms[frame * 2];
+        const Platform* horizontal_platform = sorted_platforms[frame * 2 + 1];
+        
+        Color frame_color = frame_colors[frame % num_colors];
+        
+        // Calculate bounding box for this reference frame
+        float min_x = std::min({slope_platform->top_left.x, slope_platform->top_right.x, 
+                               horizontal_platform->top_left.x, horizontal_platform->top_right.x}) - 20;
+        float max_x = std::max({slope_platform->top_left.x, slope_platform->top_right.x,
+                               horizontal_platform->top_left.x, horizontal_platform->top_right.x}) + 20;
+        float min_y = std::min({slope_platform->top_left.y, slope_platform->top_right.y,
+                               horizontal_platform->top_left.y, horizontal_platform->top_right.y}) - 50;
+        float max_y = std::max({slope_platform->top_left.y, slope_platform->top_right.y,
+                               horizontal_platform->top_left.y, horizontal_platform->top_right.y}) + 50;
+        
+        // Draw reference frame boundary
+        DrawRectangleLines((int)min_x, (int)min_y, (int)(max_x - min_x), (int)(max_y - min_y), frame_color);
+        DrawText(TextFormat("Frame %d", frame + 1), (int)min_x, (int)min_y - 20, 16, frame_color);
+    }
+    
+    // Draw all trajectory segments (rest of the function stays exactly the same)
     for (size_t i = 0; i < trajectory_segments.size(); i++) {
         const auto& segment = trajectory_segments[i];
         
@@ -670,14 +708,14 @@ void Box::DrawMultiPlatformGhost(const std::vector<Platform>& platforms) {
     if (!trajectory_segments.empty()) {
         float border = 2.0f;
         DrawRectanglePro(
-            (Rectangle){ final_ghost_position.x + size.x * 0.5f, final_ghost_position.y - size.y * 0.5f, size.x, size.y }, 
+            (Rectangle){ final_ghost_position.x, final_ghost_position.y, size.x, size.y }, 
             (Vector2){ size.x * 0.5f, size.y * 0.5f }, 
             0.0f,
             (Color){255, 255, 255, 100}
         );
         
         DrawRectanglePro(
-            (Rectangle){ final_ghost_position.x + size.x * 0.5f, final_ghost_position.y - size.y * 0.5f, size.x - border * 2, size.y - border * 2 }, 
+            (Rectangle){ final_ghost_position.x, final_ghost_position.y, size.x - border * 2, size.y - border * 2 }, 
             (Vector2){ (size.x - border * 2) * 0.5f, (size.y - border * 2) * 0.5f }, 
             0.0f,
             (Color){color.r, color.g, color.b, 80}
@@ -693,6 +731,10 @@ void Box::DrawMultiPlatformGhost(const std::vector<Platform>& platforms) {
         }
         DrawText(TextFormat("Total dist: %.1f", total_distance), text_pos.x, text_pos.y, 14, WHITE);
         DrawText(TextFormat("Segments: %d", trajectory_segments.size()), text_pos.x, text_pos.y + 20, 14, WHITE);
+        
+        // Show how many reference frames are being calculated
+        int num_frames = (trajectory_segments.size() + 1) / 2; // Rough estimate
+        DrawText(TextFormat("Frames: %d", num_frames), text_pos.x, text_pos.y + 40, 14, WHITE);
     }
 }
 
@@ -1145,7 +1187,7 @@ void Box::CalculateMultiReferenceFrameTrajectory(const std::vector<Platform>& pl
     
     // CRITICAL FIX: Find which reference frame the box is actually on
     int starting_frame = -1;
-    for (int frame = 0; frame < 2 && frame * 2 + 1 < (int)sorted_platforms.size(); frame++) {
+    for (int frame = 0; frame * 2 + 1 < (int)sorted_platforms.size(); frame++) {
         const Platform* slope_platform = sorted_platforms[frame * 2];
         const Platform* horizontal_platform = sorted_platforms[frame * 2 + 1];
         
@@ -1160,8 +1202,8 @@ void Box::CalculateMultiReferenceFrameTrajectory(const std::vector<Platform>& pl
         return; // Box not on any known reference frame
     }
     
-    // Process reference frames starting from where the box actually is
-    int max_frames = std::min(2 - starting_frame, (int)sorted_platforms.size() / 2 - starting_frame);
+    // REMOVED LIMIT: Process ALL reference frames starting from where the box actually is
+    int max_frames = (int)sorted_platforms.size() / 2 - starting_frame; // No arbitrary limit
     
     for (int frame_offset = 0; frame_offset < max_frames; frame_offset++) {
         int frame = starting_frame + frame_offset;
