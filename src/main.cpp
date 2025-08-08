@@ -131,7 +131,7 @@ int main(int argc, char* argv[]) {
     // Only add default platforms if no config was loaded
     if (!config_loaded) {
         std::cout << "Using default platform configuration" << std::endl;
-        Vector2 plat_start = { screenWidth/2, screenHeight };
+        Vector2 plat_start = { screenWidth/2.0f, screenHeight };
         Vector2 plat_size = { screenWidth, 320.0f };
         Platform platform = {plat_start, plat_size};
 

@@ -78,6 +78,11 @@ public:
     // New reference frame-based trajectory calculation
     void CalculateMultiReferenceFrameTrajectory(const std::vector<Platform>& platforms);
     
+    // NEW: Platform grouping and improved reference frame methods
+    std::vector<std::vector<const Platform*>> FindPlatformGroups(const std::vector<Platform>& platforms);
+    bool ProcessPlatformGroup(const std::vector<const Platform*>& group, Vector2 start_pos, float initial_speed, Vector2& end_pos, float& end_speed);
+    Vector2 CalculateProjectileToGroup(Vector2 launch_pos, float launch_speed, const std::vector<const Platform*>& target_group);
+    
     // Helper methods for reference frame approach
     struct PlatformPair {
         const Platform* slope_platform;        // First platform in the pair (any steepness)
