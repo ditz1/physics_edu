@@ -1058,82 +1058,28 @@ const Platform* Box::FindNextPlatformToRight(const Platform& current_platform, c
     Vector2 current_right_end = GetRightEndOfPlatform(current_platform);
     std::cout << "Current platform right end: (" << current_right_end.x << ", " << current_right_end.y << ")" << std::endl;
     
-    const Platform* best_platform = nullptr;
-    float best_score = std::numeric_limits<float>::max();
+    // Find the platform with the next highest ID
+    const Platform* next_platform = nullptr;
+    int target_id = current_platform.id + 1;
     
     for (size_t i = 0; i < platforms.size(); i++) {
         const auto& platform = platforms[i];
-        if (&platform == &current_platform) continue;
         
         std::cout << "\nChecking platform " << platform.id << " (rotation: " << platform.rotation << ")" << std::endl;
         
-        // Check if this platform is reachable
-        Vector2 intersection;
-        bool platforms_connected = CheckCollisionLines(
-            current_platform.top_left, current_platform.top_right,
-            platform.top_left, platform.top_right, &intersection
-        );
-        
-        if (platforms_connected) {
-            std::cout << "Direct intersection found at (" << intersection.x << ", " << intersection.y << ")" << std::endl;
-            // For intersecting platforms, prioritize by position relative to current platform
-            float distance_to_intersection = Vector2Distance(current_right_end, intersection);
-            std::cout << "Distance to intersection: " << distance_to_intersection << std::endl;
-            
-            if (distance_to_intersection < best_score) {
-                best_score = distance_to_intersection;
-                best_platform = &platform;
-                std::cout << "New best platform (intersection): " << platform.id << std::endl;
-            }
-            continue;
-        }
-        
-        // Check proximity to platform endpoints
-        Vector2 platform_left_end = (platform.top_left.x < platform.top_right.x) ? platform.top_left : platform.top_right;
-        Vector2 platform_right_end = (platform.top_left.x > platform.top_right.x) ? platform.top_left : platform.top_right;
-        
-        float dist_to_left = Vector2Distance(current_right_end, platform_left_end);
-        float dist_to_right = Vector2Distance(current_right_end, platform_right_end);
-        float min_distance = std::min(dist_to_left, dist_to_right);
-        
-        std::cout << "Distance to platform left: " << dist_to_left << std::endl;
-        std::cout << "Distance to platform right: " << dist_to_right << std::endl;
-        std::cout << "Min distance: " << min_distance << std::endl;
-        
-        // Only consider platforms that are reasonably close and in the right direction
-        if (min_distance < 200.0f) {
-            // Prefer platforms that are more "to the right" and "below" current platform
-            Vector2 platform_center = Vector2Scale(Vector2Add(platform.top_left, platform.top_right), 0.5f);
-            Vector2 current_center = Vector2Scale(Vector2Add(current_platform.top_left, current_platform.top_right), 0.5f);
-            
-            // Score based on: distance + rightward preference + downward preference
-            float rightward_bonus = (platform_center.x > current_center.x) ? 0.0f : 50.0f; // Penalty for leftward platforms
-            float downward_bonus = (platform_center.y > current_center.y) ? 0.0f : 25.0f;  // Penalty for upward platforms
-            
-            float total_score = min_distance + rightward_bonus + downward_bonus;
-            
-            std::cout << "Platform center: (" << platform_center.x << ", " << platform_center.y << ")" << std::endl;
-            std::cout << "Current center: (" << current_center.x << ", " << current_center.y << ")" << std::endl;
-            std::cout << "Rightward bonus: " << rightward_bonus << std::endl;
-            std::cout << "Downward bonus: " << downward_bonus << std::endl;
-            std::cout << "Total score: " << total_score << std::endl;
-            
-            if (total_score < best_score) {
-                best_score = total_score;
-                best_platform = &platform;
-                std::cout << "New best platform (proximity): " << platform.id << std::endl;
-            }
-        } else {
-            std::cout << "Platform too far away: " << min_distance << std::endl;
+        if (platform.id == target_id) {
+            std::cout << "Found next platform by ID: " << platform.id << std::endl;
+            next_platform = &platform;
+            break;
         }
     }
     
-    if (best_platform) {
-        std::cout << "=== SELECTED: Platform " << best_platform->id << " ===" << std::endl;
-        return best_platform;
+    if (next_platform) {
+        std::cout << "=== SELECTED: Platform " << next_platform->id << " ===" << std::endl;
+        return next_platform;
     }
     
-    std::cout << "=== NO PLATFORM FOUND ===" << std::endl;
+    std::cout << "=== NO PLATFORM FOUND (no platform with ID " << target_id << ") ===" << std::endl;
     return nullptr;
 }
 

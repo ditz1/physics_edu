@@ -17,8 +17,8 @@ public:
 
     std::vector<Vector2> path;
 
-    void CheckGrab();
-    void Grab(Vector2 mouse_position);
+    void CheckGrab(Vector2 world_mouse_position);
+    void Grab(Vector2 world_mouse_position);
     virtual void Update(float dt);
     virtual void Draw();
     void ApplyGravity(float dt);

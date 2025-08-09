@@ -12,6 +12,8 @@ public:
         this->is_grabbed = false;
         this->rotation = rotation;
         this->log_texture = nullptr; // Initialize to nullptr to prevent segfault
+        this->log_end_texture = nullptr; // NEW
+        this->log_slice_texture = nullptr; // NEW
     }
     Vector2 size;
     float rotation = 0.0f;
@@ -26,14 +28,16 @@ public:
     Vector2 resize_start_position;
     Vector2 resize_start_mouse;
     Vector2 resize_anchor_point; // NEW: Store the anchor point during resize
-    Texture2D* log_texture;
+    Texture2D* log_texture; // This will be the start/end texture
+    Texture2D* log_end_texture; // NEW: End piece texture
+    Texture2D* log_slice_texture; // NEW: Middle slice texture
 
     void Draw() override;
     void Update(float dt) override {}
     
     // Resize functionality methods
-    void CheckResize();
-    void HandleResize(Vector2 mouse_position);
+    void CheckResize(Vector2 world_mouse_position);
+    void HandleResize(Vector2 world_mouse_position);
     Vector2 GetResizeHandlePosition() const;
     Vector2 GetAnchorPosition() const; // NEW: Get the anchor point position
     
@@ -41,4 +45,7 @@ public:
     Vector2 GetTopLeft() const {
         return { position.x - size.x * 0.5f, position.y - size.y * 0.5f };
     }
+
+private:
+    void DrawLogWithSlices();
 };

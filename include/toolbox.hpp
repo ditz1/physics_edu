@@ -13,7 +13,7 @@ extern std::vector<Platform> all_platforms;
 class Toolbox {
 public:
     void Draw();
-    void Update(float dt, std::vector<Platform>& platforms, const Box& box, const Gorilla& gorilla);
+    void Update(float dt, std::vector<Platform>& platforms, const Box& box, const Gorilla& gorilla, Vector2 world_mouse_pos);
     void SavePlatformConfiguration(const std::vector<Platform>& platforms, const Box& box, const Gorilla& gorilla);    
     std::vector<Object*> objects;
     

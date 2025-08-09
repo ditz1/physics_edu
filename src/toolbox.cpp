@@ -56,7 +56,7 @@ void Toolbox::Draw() {
     }
 }
 
-void Toolbox::Update(float dt, std::vector<Platform>& platforms, const Box& box, const Gorilla& gorilla) {
+void Toolbox::Update(float dt, std::vector<Platform>& platforms, const Box& box, const Gorilla& gorilla, Vector2 world_mouse_pos) {
     if (!edit_mode) return;
     
     // save platform configuration with 'J' key
@@ -71,16 +71,13 @@ void Toolbox::Update(float dt, std::vector<Platform>& platforms, const Box& box,
     }
     
     if (creating_platform) {
-        Vector2 mouse_pos = GetMousePosition();
-        
         if (IsMouseButtonPressed(MOUSE_LEFT_BUTTON) && !mouse_pressed) {
-            platform_start_pos = mouse_pos;
+            platform_start_pos = world_mouse_pos;  // Use world coordinates
             mouse_pressed = true;
         }
         
-        // update current position while dragging
         if (mouse_pressed) {
-            platform_current_pos = mouse_pos;
+            platform_current_pos = world_mouse_pos;  // Use world coordinates
         }
         
         if (IsMouseButtonReleased(MOUSE_LEFT_BUTTON) && mouse_pressed) {
@@ -89,7 +86,6 @@ void Toolbox::Update(float dt, std::vector<Platform>& platforms, const Box& box,
                 platform_current_pos.y - platform_start_pos.y
             };
             
-            // Only create platform if it has reasonable size
             if (fabs(size.x) > 10.0f && fabs(size.y) > 10.0f) {
                 Vector2 center = {
                     platform_start_pos.x + size.x * 0.5f,
@@ -97,12 +93,12 @@ void Toolbox::Update(float dt, std::vector<Platform>& platforms, const Box& box,
                 };
                 
                 Platform new_platform(center, { fabs(size.x), fabs(size.y) }, 0.0f);
-                new_platform.id = platforms.size(); // Assign the next available ID
+                new_platform.id = platforms.size();
                 platforms.push_back(new_platform);
             }
             
             mouse_pressed = false;
-            creating_platform = false; // Exit creation mode after creating
+            creating_platform = false;
         }
     }
 }

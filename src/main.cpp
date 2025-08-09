@@ -29,6 +29,10 @@ public:
 } Star; 
 
 
+Vector2 GetWorldMousePosition(Camera2D camera) {
+    return GetScreenToWorld2D(GetMousePosition(), camera);
+}
+
 void DrawDebugInfo(Spring spring){
     float x_start = GetScreenWidth() - 300.0f;
     float y_start = 10.0f;
@@ -106,6 +110,8 @@ int main(int argc, char* argv[]) {
     Texture2D gorilla_tex = LoadTexture("../assets/gorilla.png");
     Texture2D bananas_tex = LoadTexture("../assets/bananas.png");
     Texture2D log_tex = LoadTexture("../assets/log.png");
+    Texture2D log_end_tex = LoadTexture("../assets/log_end.png");  // NEW
+    Texture2D log_slice_tex = LoadTexture("../assets/log_slice.png");  // NEW
 
     float dt_modifier = 1.0f;
 
@@ -204,22 +210,24 @@ int main(int argc, char* argv[]) {
             }
         }
 
-        // MOVED: Set texture for ALL platforms at the beginning of each frame
-        // This ensures new platforms get their texture set properly
+        // assign platform textures
         for (int i = 0; i < all_platforms.size(); i++) {
-            all_platforms[i].log_texture = &log_tex;
+            all_platforms[i].log_texture = &log_tex;          // Start piece
+            all_platforms[i].log_end_texture = &log_end_tex;  // End piece
+            all_platforms[i].log_slice_texture = &log_slice_tex; // Middle slice
         }
 
         // Only update game logic when level selector is not active
         if (!level_selector.is_active) {
+            Vector2 world_mouse_pos = GetWorldMousePosition(camera.camera);
+    
             bool was_grabbed_last_frame = box.is_grabbed;
-            box.CheckGrab();
+            box.CheckGrab(world_mouse_pos);  // Pass world coordinates
             if (box.is_grabbed) {
-                Vector2 mouse_position = GetMousePosition();
-                box.Grab(mouse_position);
+                box.Grab(world_mouse_pos);   // Pass world coordinates
                 box.velocity = { 0.0f, 0.0f };
                 box.acceleration = { 0.0f, 0.0f };
-                box.ghost_calculated = false; // reset ghost calculation when grabbed
+                box.ghost_calculated = false;
             }
 
             // Check if box was just released
@@ -238,26 +246,22 @@ int main(int argc, char* argv[]) {
 
             // Handle platform editing and deletion (only when not in level selector)
             int platform_to_delete = -1;
-            
+    
             for (int i = 0; i < all_platforms.size(); i++) {
                 Platform& platform = all_platforms[i];
-                // REMOVED: platform.log_texture = &log_tex; (moved to top of loop)
                 
-                platform.CheckResize();
+                platform.CheckResize(world_mouse_pos);  // Pass world coordinates
                 if (platform.is_resizing) {
-                    Vector2 mouse_position = GetMousePosition();
-                    platform.HandleResize(mouse_position);
+                    platform.HandleResize(world_mouse_pos);  // Pass world coordinates
                     platform.is_selected = true;
                 } else {
-                    platform.CheckGrab();
+                    platform.CheckGrab(world_mouse_pos);  // Pass world coordinates
                     if (platform.is_grabbed) {
                         platform.is_selected = true;
-                        Vector2 mouse_position = GetMousePosition();
-                        platform.Grab(mouse_position);
+                        platform.Grab(world_mouse_pos);  // Pass world coordinates
                         
                         if (IsKeyPressed(KEY_D)) {
                             platform_to_delete = i;
-                            std::cout << "Marking platform " << i << " for deletion" << std::endl;
                         }
                     } else {
                         platform.is_selected = false;
@@ -275,10 +279,9 @@ int main(int argc, char* argv[]) {
             
             // Handle gorilla editing - ONLY in edit mode (same as platforms)
             if (edit_mode) {
-                gorilla.CheckGrab();
+                gorilla.CheckGrab(world_mouse_pos);  // Pass world coordinates
                 if (gorilla.is_grabbed) {
-                    Vector2 mouse_position = GetMousePosition();
-                    gorilla.Grab(mouse_position);
+                    gorilla.Grab(world_mouse_pos);   // Pass world coordinates
                 }
             }
             
@@ -359,7 +362,7 @@ int main(int argc, char* argv[]) {
             }
 
             if (toolbox_active) {
-                toolbox.Update(dt, all_platforms, box, gorilla);
+                toolbox.Update(dt, all_platforms, box, gorilla, world_mouse_pos);  // Pass world coordinates
             }
         }
 
@@ -447,6 +450,9 @@ int main(int argc, char* argv[]) {
     UnloadTexture(gorilla_tex);
     UnloadTexture(bananas_tex);
     UnloadTexture(log_tex);
+    UnloadTexture(log_end_tex);  
+    UnloadTexture(log_slice_tex);
+    
     CloseWindow();
 
     return 0;

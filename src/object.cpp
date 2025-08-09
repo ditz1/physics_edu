@@ -34,12 +34,11 @@ void Object::DrawVectors() {
     }
 }
 
-void Object::CheckGrab() {
-    Vector2 mouse_position = GetMousePosition();
+void Object::CheckGrab(Vector2 world_mouse_position) {
     if (IsMouseButtonPressed(MOUSE_LEFT_BUTTON)) {
-        if (CheckCollisionPointCircle(mouse_position, position, 20.0f)) { // radius of 20.0f for the grab area
+        if (CheckCollisionPointCircle(world_mouse_position, position, 20.0f)) {
             is_grabbed = true;
-            grab_offset = Vector2Subtract(position, mouse_position);
+            grab_offset = Vector2Subtract(position, world_mouse_position);
             grab_position = position;
         }
     } else if (IsMouseButtonReleased(MOUSE_LEFT_BUTTON)) {
@@ -47,10 +46,17 @@ void Object::CheckGrab() {
     }
 }
 
-void Object::Grab(Vector2 mouse_position) {
+void Object::Grab(Vector2 world_mouse_position) {
     if (is_grabbed) {
-        position = Vector2Add(mouse_position, grab_offset);
+        // Calculate target position
+        Vector2 target_position = Vector2Add(world_mouse_position, grab_offset);
+        
+        // Apply damping - only move a fraction of the distance toward target
+        float damping_factor = 0.03f; ///t this value: 0.05f = very slow, 0.5f = fast
+        Vector2 movement = Vector2Scale(Vector2Subtract(target_position, position), damping_factor);
+        
+        position = Vector2Add(position, movement);
         velocity = Vector2Subtract(position, grab_position);
-        grab_position = position; // update grab position to current position
+        grab_position = position;
     }
 }
