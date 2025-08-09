@@ -76,6 +76,62 @@ void LevelSelector::Update() {
     }
 }
 
+void LevelSelector::UpdateTransition(float dt, std::vector<Platform>& platforms, Box& box, Gorilla& gorilla) {
+    if (!is_transitioning) return;
+    
+    transition_timer += dt;
+    float progress = transition_timer / TRANSITION_DURATION;
+    progress = EaseInOutCubic(fminf(progress, 1.0f)); // Apply easing
+    
+    // Update platform positions
+    platforms.clear();
+    for (auto& transition : transitioning_platforms) {
+        Platform animated_platform = transition.platform;
+        animated_platform.position = Vector2Lerp(transition.start_position, transition.target_position, progress);
+        
+        // Only add platforms that are still visible or moving in
+        if (!transition.is_old_platform || animated_platform.position.x > -2000.0f) {
+            platforms.push_back(animated_platform);
+        }
+    }
+    
+    // Update box position
+    box.position = Vector2Lerp(box_transition.start_position, box_transition.target_position, progress);
+    box.origin_position = box_transition.target_position; // Update origin for reset functionality
+    
+    // Update gorilla position
+    gorilla.position = Vector2Lerp(gorilla_transition.start_position, gorilla_transition.target_position, progress);
+    
+    // Check if transition is complete
+    if (transition_timer >= TRANSITION_DURATION) {
+        is_transitioning = false;
+        transition_timer = 0.0f;
+        
+        // Finalize positions and clean up
+        platforms.clear();
+        for (auto& transition : transitioning_platforms) {
+            if (!transition.is_old_platform) { // Only keep new platforms
+                Platform final_platform = transition.platform;
+                final_platform.position = transition.target_position;
+                platforms.push_back(final_platform);
+            }
+        }
+        
+        // Reassign platform IDs
+        for (size_t i = 0; i < platforms.size(); i++) {
+            platforms[i].id = (int)i;
+        }
+        
+        // Set final positions
+        box.position = box_transition.target_position;
+        box.origin_position = box_transition.target_position;
+        gorilla.position = gorilla_transition.target_position;
+        
+        transitioning_platforms.clear();
+        std::cout << "Level transition complete!" << std::endl;
+    }
+}
+
 void LevelSelector::DrawLevelButton(int level, int variant, Rectangle button_rect, bool is_selected) {
     // Check if this level variant actually exists
     std::string level_path = GetLevelPath(level, variant);
@@ -112,7 +168,6 @@ std::string LevelSelector::GetLevelPath(int level, int variant) {
     return path;
 }
 
-// Fixed: loads the next stage in the level, if already at the end it will load the next tier of level
 void LevelSelector::LoadNewLevel(std::vector<Platform>& platforms, Box& box, Gorilla& gorilla) {
     int original_level = selected_level;
     int original_variant = selected_variant;
@@ -157,16 +212,48 @@ void LevelSelector::LoadNewLevel(std::vector<Platform>& platforms, Box& box, Gor
         return;
     }
     
-    // Load the level
-    if (LoadLevelConfig(level_path, platforms, box, gorilla)) {
-        std::cout << "Successfully loaded Level " << selected_level << "-" << selected_variant 
-                  << " from: " << level_path << std::endl;
+    // Load the new level data
+    std::vector<Platform> new_platforms;
+    Vector2 new_box_pos, new_gorilla_pos;
+    
+    if (LoadLevelConfigForTransition(level_path, new_platforms, new_box_pos, new_gorilla_pos)) {
+        // Start the animated transition
+        StartTransition(platforms, new_platforms, box.position, new_box_pos, gorilla.position, new_gorilla_pos);
+        std::cout << "Starting animated transition to Level " << selected_level << "-" << selected_variant << std::endl;
     } else {
         std::cout << "Failed to load Level " << selected_level << "-" << selected_variant 
                   << ", reverting to previous level" << std::endl;
         selected_level = original_level;
         selected_variant = original_variant;
     }
+}
+
+void LevelSelector::StartTransition(const std::vector<Platform>& old_platforms, const std::vector<Platform>& new_platforms, 
+    const Vector2& old_box_pos, const Vector2& new_box_pos,
+    const Vector2& old_gorilla_pos, const Vector2& new_gorilla_pos) {
+    is_transitioning = true;
+    transition_timer = 0.0f;
+    transitioning_platforms.clear();
+        
+    // Set up old platforms to slide out to the left
+    for (const auto& platform : old_platforms) {
+    Vector2 target_pos = {platform.position.x - 1000.0f, platform.position.y};
+    transitioning_platforms.emplace_back(platform, platform.position, target_pos, true);
+    }
+    
+    // Set up new platforms to slide in from the right
+    for (const auto& platform : new_platforms) {
+    Vector2 start_pos = {platform.position.x + 1000.0f, platform.position.y};
+    transitioning_platforms.emplace_back(platform, start_pos, platform.position, false);
+    }
+    
+    // Set up box transition
+    box_transition.start_position = old_box_pos;
+    box_transition.target_position = new_box_pos;
+    
+    // Set up gorilla transition
+    gorilla_transition.start_position = old_gorilla_pos;
+    gorilla_transition.target_position = new_gorilla_pos;
 }
 
 bool LevelSelector::LoadSelectedLevel(std::vector<Platform>& platforms, Box& box, Gorilla& gorilla) {
@@ -180,75 +267,48 @@ bool LevelSelector::LoadSelectedLevel(std::vector<Platform>& platforms, Box& box
     return LoadLevelConfig(level_path, platforms, box, gorilla);
 }
 
-bool LevelSelector::LoadLevelConfigTransition(const std::string& filepath, std::vector<Platform>& platforms, Box& box, Gorilla& gorilla) {
+bool LevelSelector::LoadLevelConfigForTransition(const std::string& filepath, std::vector<Platform>& new_platforms, Vector2& new_box_pos, Vector2& new_gorilla_pos) {
     std::ifstream file(filepath);
     
     if (!file.is_open()) {
         std::cerr << "Failed to open " << filepath << std::endl;
         return false;
     }
-
-    std::vector<Platform> old_platforms;
-    Vector2 old_box_position;
-    Vector2 old_gorilla_position;
     
-    platforms.clear();
+    new_platforms.clear();
     
     std::string line;
     int platform_count = 0;
     bool box_position_loaded = false;
     bool gorilla_position_loaded = false;
-    Vector2 default_box_position = { 75.0f, (float)GetScreenHeight() / 2.0f - 200.0f }; // Default position
-    Vector2 default_gorilla_position = { (float)GetScreenWidth() - 150.0f, 480.0f }; // Default position
+    Vector2 default_box_position = { 75.0f, (float)GetScreenHeight() / 2.0f - 200.0f };
+    Vector2 default_gorilla_position = { (float)GetScreenWidth() - 150.0f, 480.0f };
     
     while (std::getline(file, line)) {
         if (line.empty()) continue;
         
-        // Check if this line defines a box position
         if (line.find("BOX") == 0) {
-            // Parse BOX line: "BOX, x, y"
             float box_x, box_y;
-            
-            // Find the first comma and parse from there
             size_t first_comma = line.find(',');
             if (first_comma != std::string::npos) {
                 std::string coords = line.substr(first_comma + 1);
-                
                 if (sscanf(coords.c_str(), " %f, %f", &box_x, &box_y) == 2) {
-                    Vector2 box_pos = { box_x, box_y };
-                    box.position = box_pos;
-                    box.origin_position = box_pos; // Set the origin position for reset
+                    new_box_pos = { box_x, box_y };
                     box_position_loaded = true;
-                    std::cout << "Loaded box position: (" << box_x << ", " << box_y << ")" << std::endl;
-                } else {
-                    std::cout << "Failed to parse box coordinates from: " << coords << std::endl;
                 }
-            } else {
-                std::cout << "Failed to find comma in BOX line: " << line << std::endl;
             }
         }
-        // Check if this line defines a gorilla position
         else if (line.find("GORILLA") == 0) {
-            // Parse GORILLA line: "GORILLA, x, y"
             float gorilla_x, gorilla_y;
-            
             size_t first_comma = line.find(',');
             if (first_comma != std::string::npos) {
                 std::string coords = line.substr(first_comma + 1);
-                
                 if (sscanf(coords.c_str(), " %f, %f", &gorilla_x, &gorilla_y) == 2) {
-                    Vector2 gorilla_pos = { gorilla_x, gorilla_y };
-                    gorilla.position = gorilla_pos;
+                    new_gorilla_pos = { gorilla_x, gorilla_y };
                     gorilla_position_loaded = true;
-                    std::cout << "Loaded gorilla position: (" << gorilla_x << ", " << gorilla_y << ")" << std::endl;
-                } else {
-                    std::cout << "Failed to parse gorilla coordinates from: " << coords << std::endl;
                 }
-            } else {
-                std::cout << "Failed to find comma in GORILLA line: " << line << std::endl;
             }
         }
-        // Otherwise check if this line defines a platform
         else {
             char type;
             float center_x, center_y, width, height, rotation;
@@ -261,36 +321,24 @@ bool LevelSelector::LoadLevelConfigTransition(const std::string& filepath, std::
                     
                     Platform new_platform(pos, size, rotation);
                     new_platform.id = platform_count;
-                    platforms.push_back(new_platform);
+                    new_platforms.push_back(new_platform);
                     platform_count++;
-                    std::cout << "Loaded platform " << platform_count << ": pos(" << pos.x << "," << pos.y 
-                             << ") size(" << size.x << "," << size.y << ") rot(" << rotation << ")" << std::endl;
                 }
-            } else {
-                std::cout << "Failed to parse line: " << line << std::endl;
             }
         }
     }
-
     
-    // If no box position was loaded from file, use default
     if (!box_position_loaded) {
-        box.position = default_box_position;
-        box.origin_position = default_box_position;
-        std::cout << "Using default box position: (" << default_box_position.x << ", " << default_box_position.y << ")" << std::endl;
+        new_box_pos = default_box_position;
     }
     
-    // If no gorilla position was loaded from file, use default
     if (!gorilla_position_loaded) {
-        gorilla.position = default_gorilla_position;
-        std::cout << "Using default gorilla position: (" << default_gorilla_position.x << ", " << default_gorilla_position.y << ")" << std::endl;
+        new_gorilla_pos = default_gorilla_position;
     }
     
-    std::cout << "Level configuration loaded from " << filepath << " - " << platform_count << " platforms loaded" << std::endl;
     file.close();
     return true;
 }
-
 
 bool LevelSelector::LoadLevelConfig(const std::string& filepath, std::vector<Platform>& platforms, Box& box, Gorilla& gorilla) {
     std::ifstream file(filepath);
@@ -306,57 +354,37 @@ bool LevelSelector::LoadLevelConfig(const std::string& filepath, std::vector<Pla
     int platform_count = 0;
     bool box_position_loaded = false;
     bool gorilla_position_loaded = false;
-    Vector2 default_box_position = { 75.0f, (float)GetScreenHeight() / 2.0f - 200.0f }; // Default position
-    Vector2 default_gorilla_position = { (float)GetScreenWidth() - 150.0f, 480.0f }; // Default position
+    Vector2 default_box_position = { 75.0f, (float)GetScreenHeight() / 2.0f - 200.0f };
+    Vector2 default_gorilla_position = { (float)GetScreenWidth() - 150.0f, 480.0f };
     
     while (std::getline(file, line)) {
         if (line.empty()) continue;
         
-        // Check if this line defines a box position
         if (line.find("BOX") == 0) {
-            // Parse BOX line: "BOX, x, y"
             float box_x, box_y;
-            
-            // Find the first comma and parse from there
             size_t first_comma = line.find(',');
             if (first_comma != std::string::npos) {
                 std::string coords = line.substr(first_comma + 1);
-                
                 if (sscanf(coords.c_str(), " %f, %f", &box_x, &box_y) == 2) {
                     Vector2 box_pos = { box_x, box_y };
                     box.position = box_pos;
-                    box.origin_position = box_pos; // Set the origin position for reset
+                    box.origin_position = box_pos;
                     box_position_loaded = true;
-                    std::cout << "Loaded box position: (" << box_x << ", " << box_y << ")" << std::endl;
-                } else {
-                    std::cout << "Failed to parse box coordinates from: " << coords << std::endl;
                 }
-            } else {
-                std::cout << "Failed to find comma in BOX line: " << line << std::endl;
             }
         }
-        // Check if this line defines a gorilla position
         else if (line.find("GORILLA") == 0) {
-            // Parse GORILLA line: "GORILLA, x, y"
             float gorilla_x, gorilla_y;
-            
             size_t first_comma = line.find(',');
             if (first_comma != std::string::npos) {
                 std::string coords = line.substr(first_comma + 1);
-                
                 if (sscanf(coords.c_str(), " %f, %f", &gorilla_x, &gorilla_y) == 2) {
                     Vector2 gorilla_pos = { gorilla_x, gorilla_y };
                     gorilla.position = gorilla_pos;
                     gorilla_position_loaded = true;
-                    std::cout << "Loaded gorilla position: (" << gorilla_x << ", " << gorilla_y << ")" << std::endl;
-                } else {
-                    std::cout << "Failed to parse gorilla coordinates from: " << coords << std::endl;
                 }
-            } else {
-                std::cout << "Failed to find comma in GORILLA line: " << line << std::endl;
             }
         }
-        // Otherwise check if this line defines a platform
         else {
             char type;
             float center_x, center_y, width, height, rotation;
@@ -371,29 +399,24 @@ bool LevelSelector::LoadLevelConfig(const std::string& filepath, std::vector<Pla
                     new_platform.id = platform_count;
                     platforms.push_back(new_platform);
                     platform_count++;
-                    std::cout << "Loaded platform " << platform_count << ": pos(" << pos.x << "," << pos.y 
-                             << ") size(" << size.x << "," << size.y << ") rot(" << rotation << ")" << std::endl;
                 }
-            } else {
-                std::cout << "Failed to parse line: " << line << std::endl;
             }
         }
     }
     
-    // If no box position was loaded from file, use default
     if (!box_position_loaded) {
         box.position = default_box_position;
         box.origin_position = default_box_position;
-        std::cout << "Using default box position: (" << default_box_position.x << ", " << default_box_position.y << ")" << std::endl;
     }
     
-    // If no gorilla position was loaded from file, use default
     if (!gorilla_position_loaded) {
         gorilla.position = default_gorilla_position;
-        std::cout << "Using default gorilla position: (" << default_gorilla_position.x << ", " << default_gorilla_position.y << ")" << std::endl;
     }
     
-    std::cout << "Level configuration loaded from " << filepath << " - " << platform_count << " platforms loaded" << std::endl;
     file.close();
     return true;
+}
+
+float LevelSelector::EaseInOutCubic(float t) {
+    return t < 0.5f ? 4.0f * t * t * t : 1.0f - powf(-2.0f * t + 2.0f, 3.0f) / 2.0f;
 }

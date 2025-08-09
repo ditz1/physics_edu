@@ -407,138 +407,175 @@ int main(int argc, char* argv[]) {
             }
         }
 
-        // Handle loading screen
+        // Handle loading screen and transitions
+        // Handle loading screen and transitions
         if (loading_next_level) {
-            loading_timer -= GetFrameTime();
-            
-            if (loading_timer <= 0.0f) {
-                // Load next level
-                level_selector.LoadNewLevel(all_platforms, box, gorilla);
-                
-                // Reset physics state for both box and gorilla
+            if (level_selector.is_transitioning) {
+                // Update the animated transition
+                level_selector.UpdateTransition(GetFrameTime(), all_platforms, box, gorilla);
+
+                // Reset physics state during transition
                 box.velocity = { 0.0f, 0.0f };
                 box.acceleration = { 0.0f, 0.0f };
                 box.ghost_calculated = false;
                 box.multi_platform_ghost_calculated = false;
                 box.has_prediction_start = false;
                 box.is_colliding = false;
-                
-                // Reset level switching state
+            } else {
+                loading_timer -= GetFrameTime();
+
+                if (loading_timer <= 0.0f) {
+                    // Start the animated transition
+                    level_selector.LoadNewLevel(all_platforms, box, gorilla);
+
+                    if (!level_selector.is_transitioning) {
+                        // If transition didn't start (error), finish loading
+                        loading_next_level = false;
+                        collision_with_gorilla = false;
+                        showing_success = false;
+                        level_switch_timer = 0.0f;
+                        loading_timer = 0.0f;
+                    }
+                }
+            }
+
+            // Check if transition is complete
+            if (!level_selector.is_transitioning && loading_timer <= 0.0f) {
+                loading_next_level = false;
                 collision_with_gorilla = false;
                 showing_success = false;
-                loading_next_level = false;
                 level_switch_timer = 0.0f;
                 loading_timer = 0.0f;
-                
-                std::cout << "Next level loaded successfully!" << std::endl;
+                std::cout << "Level transition complete!" << std::endl;
             }
         }
 
         BeginDrawing();
             ClearBackground(DARKGRAY);
-            
-            if (loading_next_level) {
-                // Draw loading screen
-                DrawRectangle(0, 0, GetScreenWidth(), GetScreenHeight(), (Color){0, 0, 0, 200});
-                
-                float loading_progress = 1.0f - (loading_timer / LOADING_DURATION);
-                int bar_width = 400;
-                int bar_height = 20;
-                int bar_x = (GetScreenWidth() - bar_width) / 2;
-                int bar_y = GetScreenHeight() / 2;
-                
-                // Draw loading bar background
-                DrawRectangle(bar_x, bar_y, bar_width, bar_height, DARKGRAY);
-                DrawRectangle(bar_x, bar_y, (int)(bar_width * loading_progress), bar_height, GREEN);
-                DrawRectangleLines(bar_x, bar_y, bar_width, bar_height, WHITE);
-                
-                // Draw loading text
-                const char* loading_text = "Loading Next Level...";
-                int text_width = MeasureText(loading_text, 30);
-                DrawText(loading_text, (GetScreenWidth() - text_width) / 2, bar_y - 50, 30, WHITE);
-                
-                // Draw percentage
-                const char* percent_text = TextFormat("%.0f%%", loading_progress * 100);
-                int percent_width = MeasureText(percent_text, 20);
-                DrawText(percent_text, (GetScreenWidth() - percent_width) / 2, bar_y + 30, 20, WHITE);
-            }
-            else if (!level_selector.is_active) {
+
+            // Always show the game view (no more black loading screen)
+            if (!level_selector.is_active) {
                 camera.FindBounds(all_platforms);
-
+            
                 BeginMode2D(camera.camera);
-
+            
                     for (Platform& plat : all_platforms) {
                         plat.Draw();
                     }
-
-                    if (box.has_prediction_start) {
+                
+                    if (box.has_prediction_start && !loading_next_level) {
                         box.DrawMultiPlatformGhost(all_platforms);
                     }
-
+                
                     // Update and draw gorilla
                     gorilla.Update(dt);
                     gorilla.Draw();
-
+                
                     box.Draw();
-                    box.DrawVectors();
 
-                    box.DrawTwoLineCollisionDebug(all_platforms);
-
+                    // Only draw vectors when not transitioning
+                    if (!loading_next_level) {
+                        box.DrawVectors();
+                        box.DrawTwoLineCollisionDebug(all_platforms);
+                    }
+                
                 EndMode2D();
-
+                
                 // Draw success message and countdown
                 if (showing_success) {
                     DrawText("Nice!", gorilla.position.x - 50, gorilla.position.y - 100, 20, GREEN);
                     DrawText(TextFormat("Next level in: %.1f", level_switch_timer), gorilla.position.x - 80, gorilla.position.y - 70, 16, YELLOW);
-                    
+
                     // Draw success overlay
                     DrawRectangle(0, 0, GetScreenWidth(), GetScreenHeight(), (Color){0, 255, 0, 30});
                 }
+            
+                // Draw transition overlay and progress
+                if (loading_next_level) {
+                    // Semi-transparent overlay during transition
+                    DrawRectangle(0, 0, GetScreenWidth(), GetScreenHeight(), (Color){0, 0, 0, 50});
 
-                if (toolbox_active) {
+                    if (level_selector.is_transitioning) {
+                        // Show transition progress
+                        float progress = level_selector.transition_timer / level_selector.TRANSITION_DURATION;
+                        const char* transition_text = "Level Transition...";
+                        int text_width = MeasureText(transition_text, 24);
+                        DrawText(transition_text, (GetScreenWidth() - text_width) / 2, 50, 24, WHITE);
+
+                        // Progress bar
+                        int bar_width = 300;
+                        int bar_height = 8;
+                        int bar_x = (GetScreenWidth() - bar_width) / 2;
+                        int bar_y = 80;
+
+                        DrawRectangle(bar_x, bar_y, bar_width, bar_height, DARKGRAY);
+                        DrawRectangle(bar_x, bar_y, (int)(bar_width * progress), bar_height, YELLOW);
+                        DrawRectangleLines(bar_x, bar_y, bar_width, bar_height, WHITE);
+                    } else {
+                        // Show initial loading message
+                        float progress = 1.0f - (loading_timer / LOADING_DURATION);
+                        const char* loading_text = "Preparing Level...";
+                        int text_width = MeasureText(loading_text, 24);
+                        DrawText(loading_text, (GetScreenWidth() - text_width) / 2, 50, 24, WHITE);
+
+                        // Progress bar
+                        int bar_width = 300;
+                        int bar_height = 8;
+                        int bar_x = (GetScreenWidth() - bar_width) / 2;
+                        int bar_y = 80;
+
+                        DrawRectangle(bar_x, bar_y, bar_width, bar_height, DARKGRAY);
+                        DrawRectangle(bar_x, bar_y, (int)(bar_width * progress), bar_height, GREEN);
+                        DrawRectangleLines(bar_x, bar_y, bar_width, bar_height, WHITE);
+                    }
+                }
+            
+                if (toolbox_active && !loading_next_level) {
                     toolbox.Draw(); 
                 }
-
-                DrawText("get the box to the green square!", 400, 200, 20, RAYWHITE);
-
-                // Debug ghost calculation status
-                if (box.has_prediction_start) {
-                    DrawText(TextFormat("Multi-platform ghost: %s", box.multi_platform_ghost_calculated ? "YES" : "NO"), 10, 100, 20, RAYWHITE);
-                    DrawText(TextFormat("Is colliding: %s", box.is_colliding ? "YES" : "NO"), 10, 130, 20, RAYWHITE);
-                    DrawText(TextFormat("Trajectory segments: %d", (int)box.trajectory_segments.size()), 10, 160, 20, RAYWHITE);
-                }
-                
-                // Show reference frame info
-                if (box.has_prediction_start && !box.trajectory_segments.empty()) {
-                    int reference_frame_count = 0;
-                    for (size_t i = 0; i < box.trajectory_segments.size(); i += 2) {
-                        reference_frame_count++;
-                    }
-                    DrawText(TextFormat("Reference frames: %d", reference_frame_count), 10, 190, 20, RAYWHITE);
-                }
-
-                DrawText(TextFormat("Force: %.2f", box_force), 10, 10, 20, RAYWHITE);
-                DrawText(TextFormat("Box Velocity: (%.2f, %.2f)", box.velocity.x, box.velocity.y), 10, 40, 20, RAYWHITE);
-                DrawText(TextFormat("Box Friction (mu_f): %.2f", box.mu_kinetic), 10, 70, 20, RAYWHITE);
-                DrawFPS(10, 10);
-
-                if (edit_mode) {
-                    DrawText("EDIT MODE", screenWidth - 140, screenHeight - 40, 20, RED);
-                    DrawText("Grab platform + D = Delete", screenWidth - 200, screenHeight - 70, 16, YELLOW);
-                }
-                
-                DrawText(TextFormat("Num Platforms: %d", all_platforms.size()), 50, 10, 20, RAYWHITE);
-                if (toolbox.creating_platform) {
-                    DrawText("Creating Platform", 50, 40, 20, RAYWHITE);
-                }
-                
-                // Show level selector instruction
-                DrawText("Press M for Level Select", 10, screenHeight - 30, 16, YELLOW);
-            }
             
+                if (!loading_next_level) {
+                    DrawText("get the box to the green square!", 400, 200, 20, RAYWHITE);
+                
+                    // Debug ghost calculation status
+                    if (box.has_prediction_start) {
+                        DrawText(TextFormat("Multi-platform ghost: %s", box.multi_platform_ghost_calculated ? "YES" : "NO"), 10, 100, 20, RAYWHITE);
+                        DrawText(TextFormat("Is colliding: %s", box.is_colliding ? "YES" : "NO"), 10, 130, 20, RAYWHITE);
+                        DrawText(TextFormat("Trajectory segments: %d", (int)box.trajectory_segments.size()), 10, 160, 20, RAYWHITE);
+                    }
+
+                    // Show reference frame info
+                    if (box.has_prediction_start && !box.trajectory_segments.empty()) {
+                        int reference_frame_count = 0;
+                        for (size_t i = 0; i < box.trajectory_segments.size(); i += 2) {
+                            reference_frame_count++;
+                        }
+                        DrawText(TextFormat("Reference frames: %d", reference_frame_count), 10, 190, 20, RAYWHITE);
+                    }
+                
+                    DrawText(TextFormat("Force: %.2f", box_force), 10, 10, 20, RAYWHITE);
+                    DrawText(TextFormat("Box Velocity: (%.2f, %.2f)", box.velocity.x, box.velocity.y), 10, 40, 20, RAYWHITE);
+                    DrawText(TextFormat("Box Friction (mu_f): %.2f", box.mu_kinetic), 10, 70, 20, RAYWHITE);
+                    DrawFPS(10, 10);
+                
+                    if (edit_mode) {
+                        DrawText("EDIT MODE", screenWidth - 140, screenHeight - 40, 20, RED);
+                        DrawText("Grab platform + D = Delete", screenWidth - 200, screenHeight - 70, 16, YELLOW);
+                    }
+
+                    DrawText(TextFormat("Num Platforms: %d", all_platforms.size()), 50, 10, 20, RAYWHITE);
+                    if (toolbox.creating_platform) {
+                        DrawText("Creating Platform", 50, 40, 20, RAYWHITE);
+                    }
+
+                    // Show level selector instruction
+                    DrawText("Press M for Level Select", 10, screenHeight - 30, 16, YELLOW);
+                }
+            }
+
             // Draw level selector (this will draw on top of everything)
             level_selector.Draw();
-            
+
         EndDrawing();
     }
 
