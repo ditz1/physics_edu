@@ -2,11 +2,11 @@
 #include "../include/toolbox.hpp"
 #include "../include/level_selector.hpp"
 #include "../include/gorilla.hpp"
+#include "../include/camera.hpp"
 #include <cstring>
 
 bool edit_mode = false;
 std::vector<Platform> all_platforms;
-
 
 
 typedef class Star {
@@ -111,8 +111,13 @@ int main(int argc, char* argv[]) {
 
     SetTargetFPS(60);
 
+
+    
+
     // Initialize level selector
     LevelSelector level_selector;
+    SimCamera camera;
+
 
     bool config_loaded = false;
     for (int i = 1; i < argc; i++) {
@@ -358,15 +363,39 @@ int main(int argc, char* argv[]) {
             }
         }
 
-        for (auto& plat : all_platforms) {
-            plat.Draw();
-        }
 
         BeginDrawing();
             ClearBackground(DARKGRAY);
             
-            // Only draw game UI when level selector is not active
             if (!level_selector.is_active) {
+                camera.FindBounds(all_platforms);
+
+                BeginMode2D(camera.camera);
+
+                    for (Platform& plat : all_platforms) {
+                        plat.Draw();
+                    }
+
+                    if (box.has_prediction_start) {
+                        box.DrawMultiPlatformGhost(all_platforms);
+                    }
+
+                    // Update and draw gorilla
+                    gorilla.Update(dt);
+                    gorilla.Draw();
+
+                    box.Draw();
+                    box.DrawVectors();
+
+                    box.DrawTwoLineCollisionDebug(all_platforms);
+
+                EndMode2D();
+
+                // Check collision between box and gorilla
+                if (gorilla.CheckCollisionWithBox(box)) {
+                    DrawText("Nice!", gorilla.position.x - 50, gorilla.position.y - 100, 20, GREEN);
+                }
+
                 if (toolbox_active) {
                     toolbox.Draw(); 
                 }
@@ -388,28 +417,6 @@ int main(int argc, char* argv[]) {
                         reference_frame_count++;
                     }
                     DrawText(TextFormat("Reference frames: %d", reference_frame_count), 10, 190, 20, RAYWHITE);
-                }
-
-                for (Platform& plat : all_platforms) {
-                    plat.Draw();
-                }
-
-                if (box.has_prediction_start) {
-                    box.DrawMultiPlatformGhost(all_platforms);
-                }
-
-                // Update and draw gorilla
-                gorilla.Update(dt);
-                gorilla.Draw();
-
-                box.Draw();
-                box.DrawVectors();
-                
-                box.DrawTwoLineCollisionDebug(all_platforms);
-
-                // Check collision between box and gorilla
-                if (gorilla.CheckCollisionWithBox(box)) {
-                    DrawText("Nice!", gorilla.position.x - 50, gorilla.position.y - 100, 20, GREEN);
                 }
 
                 DrawText(TextFormat("Force: %.2f", box_force), 10, 10, 20, RAYWHITE);
