@@ -115,6 +115,13 @@ void Platform::Draw() {
         Color handle_color = is_resizing ? ORANGE : YELLOW;
         DrawCircleV(resize_handle, 8.0f, handle_color);
         DrawCircleLines(resize_handle.x, resize_handle.y, 8.0f, BLACK);
+        
+        // NEW: Draw anchor point at top-left corner during resize
+        if (is_resizing) {
+            Vector2 anchor_point = GetAnchorPosition();
+            DrawCircleV(anchor_point, 6.0f, GREEN);
+            DrawText("ANCHOR", anchor_point.x - 25, anchor_point.y - 20, 12, GREEN);
+        }
     }
 }
 
@@ -135,6 +142,26 @@ Vector2 Platform::GetResizeHandlePosition() const {
     return world_bottom_right;
 }
 
+Vector2 Platform::GetAnchorPosition() const {
+    if (!is_resizing) {
+        // When not resizing, just return the top-left corner
+        float cos_rot = cosf(rotation * DEG2RAD);
+        float sin_rot = sinf(rotation * DEG2RAD);
+        
+        Vector2 local_top_left = { -size.x * 0.5f, -size.y * 0.5f };
+        
+        Vector2 world_top_left = {
+            local_top_left.x * cos_rot - local_top_left.y * sin_rot + position.x,
+            local_top_left.x * sin_rot + local_top_left.y * cos_rot + position.y
+        };
+        
+        return world_top_left;
+    } else {
+        // During resize, return the stored anchor point
+        return resize_anchor_point;
+    }
+}
+
 void Platform::CheckResize() {
     if (!edit_mode) return;
     
@@ -146,7 +173,20 @@ void Platform::CheckResize() {
         if (CheckCollisionPointCircle(mouse_position, resize_handle, 8.0f)) {
             is_resizing = true;
             resize_start_size = size;
+            resize_start_position = position;
             resize_start_mouse = mouse_position;
+            
+            // Calculate and store the actual anchor point (top-left corner) at resize start
+            float cos_rot = cosf(rotation * DEG2RAD);
+            float sin_rot = sinf(rotation * DEG2RAD);
+            
+            Vector2 local_top_left = { -size.x * 0.5f, -size.y * 0.5f };
+            
+            resize_anchor_point = {
+                local_top_left.x * cos_rot - local_top_left.y * sin_rot + position.x,
+                local_top_left.x * sin_rot + local_top_left.y * cos_rot + position.y
+            };
+            
             // Prevent normal grab from triggering
             is_grabbed = false;
         }
@@ -158,22 +198,89 @@ void Platform::CheckResize() {
 void Platform::HandleResize(Vector2 mouse_position) {
     if (!is_resizing) return;
     
-    // Calculate distance from platform center to mouse position
-    Vector2 center_to_mouse = Vector2Subtract(mouse_position, position);
-    float distance_to_mouse = Vector2Length(center_to_mouse);
+    // ROTATION-AWARE RESIZE LOGIC
     
-    // Calculate the initial distance from center to resize handle when resize started
-    Vector2 center_to_start = Vector2Subtract(resize_start_mouse, position);
-    float initial_distance = Vector2Length(center_to_start);
+    // Convert mouse position to platform's local coordinate system
+    float cos_rot = cosf(-rotation * DEG2RAD); // Negative to inverse the rotation
+    float sin_rot = sinf(-rotation * DEG2RAD);
     
-    // Calculate scale factor based on how much the mouse moved relative to initial distance
-    float scale_factor = (initial_distance > 0) ? (distance_to_mouse / initial_distance) : 1.0f;
+    // Translate mouse position relative to platform center when resize started
+    Vector2 mouse_relative = Vector2Subtract(mouse_position, resize_start_position);
     
-    // Apply the scale factor to the original size, with minimum constraints
-    Vector2 new_size = {
-        fmax(20.0f, resize_start_size.x * scale_factor),
-        fmax(20.0f, resize_start_size.y * scale_factor)
+    // Rotate mouse position into platform's local coordinate system
+    Vector2 mouse_local = {
+        mouse_relative.x * cos_rot - mouse_relative.y * sin_rot,
+        mouse_relative.x * sin_rot + mouse_relative.y * cos_rot
     };
     
+    // In platform's local coordinates:
+    // - Top-left corner is at (-width/2, -height/2)
+    // - Bottom-right corner is at (+width/2, +height/2)
+    // - We want to anchor the top-left and move the bottom-right
+    
+    // Calculate the anchor point in local coordinates (top-left of original platform)
+    Vector2 local_anchor = { -resize_start_size.x * 0.5f, -resize_start_size.y * 0.5f };
+    
+    // The new bottom-right corner in local coordinates is where the mouse is
+    Vector2 local_bottom_right = mouse_local;
+    
+    // Calculate new size in local coordinate system
+    Vector2 local_size_vector = Vector2Subtract(local_bottom_right, local_anchor);
+    
+    // New size is the absolute values
+    Vector2 new_size = {
+        fabs(local_size_vector.x),
+        fabs(local_size_vector.y)
+    };
+    
+    // Apply minimum constraints
+    new_size.x = fmax(20.0f, new_size.x);
+    new_size.y = fmax(20.0f, new_size.y);
+    
+    // Calculate the new center in local coordinates
+    Vector2 local_new_center;
+    
+    // Handle cases where mouse is dragged to opposite sides of anchor
+    if (local_size_vector.x >= 0 && local_size_vector.y >= 0) {
+        // Normal case: mouse is bottom-right of anchor
+        local_new_center = {
+            local_anchor.x + new_size.x * 0.5f,
+            local_anchor.y + new_size.y * 0.5f
+        };
+    } else if (local_size_vector.x < 0 && local_size_vector.y >= 0) {
+        // Mouse is bottom-left of anchor
+        local_new_center = {
+            local_anchor.x - new_size.x * 0.5f,
+            local_anchor.y + new_size.y * 0.5f
+        };
+    } else if (local_size_vector.x >= 0 && local_size_vector.y < 0) {
+        // Mouse is top-right of anchor
+        local_new_center = {
+            local_anchor.x + new_size.x * 0.5f,
+            local_anchor.y - new_size.y * 0.5f
+        };
+    } else {
+        // Mouse is top-left of anchor
+        local_new_center = {
+            local_anchor.x - new_size.x * 0.5f,
+            local_anchor.y - new_size.y * 0.5f
+        };
+    }
+    
+    // Convert the new center back to world coordinates
+    float cos_rot_forward = cosf(rotation * DEG2RAD);
+    float sin_rot_forward = sinf(rotation * DEG2RAD);
+    
+    Vector2 world_center_offset = {
+        local_new_center.x * cos_rot_forward - local_new_center.y * sin_rot_forward,
+        local_new_center.x * sin_rot_forward + local_new_center.y * cos_rot_forward
+    };
+    
+    Vector2 new_world_center = Vector2Add(resize_start_position, world_center_offset);
+    
+    // Update platform properties
     size = new_size;
+    position = new_world_center;
+    
+    // Rotation stays the same during resize
 }

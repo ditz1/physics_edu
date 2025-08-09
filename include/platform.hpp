@@ -23,7 +23,9 @@ public:
     // Resize functionality
     bool is_resizing = false;
     Vector2 resize_start_size;
+    Vector2 resize_start_position;
     Vector2 resize_start_mouse;
+    Vector2 resize_anchor_point; // NEW: Store the anchor point during resize
     Texture2D* log_texture;
 
     void Draw() override;
@@ -33,6 +35,7 @@ public:
     void CheckResize();
     void HandleResize(Vector2 mouse_position);
     Vector2 GetResizeHandlePosition() const;
+    Vector2 GetAnchorPosition() const; // NEW: Get the anchor point position
     
     // Helper function to get top-left corner if needed
     Vector2 GetTopLeft() const {
