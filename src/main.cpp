@@ -8,7 +8,6 @@
 bool edit_mode = false;
 std::vector<Platform> all_platforms;
 
-
 typedef class Star {
 public:
     Vector2 position;
@@ -27,7 +26,6 @@ public:
         };
     }
 } Star; 
-
 
 Vector2 GetWorldMousePosition(Camera2D camera) {
     return GetScreenToWorld2D(GetMousePosition(), camera);
@@ -98,7 +96,6 @@ void LoadPlatformConfigurationFromFile(const char* filename, std::vector<Platfor
     file.close();
 }
 
-
 int main(int argc, char* argv[]) {
     const int screenWidth = 1280;
     const int screenHeight = 720;
@@ -117,13 +114,18 @@ int main(int argc, char* argv[]) {
 
     SetTargetFPS(60);
 
-
-    
-
     // Initialize level selector
     LevelSelector level_selector;
     SimCamera camera;
 
+    // Level switching variables
+    bool collision_with_gorilla = false;
+    float level_switch_timer = 0.0f;
+    const float LEVEL_SWITCH_DELAY = 3.0f; // 2 seconds to show success message
+    bool showing_success = false;
+    bool loading_next_level = false;
+    float loading_timer = 0.0f;
+    const float LOADING_DURATION = 1.0f; // 1 second loading screen
 
     bool config_loaded = false;
     for (int i = 1; i < argc; i++) {
@@ -186,6 +188,12 @@ int main(int argc, char* argv[]) {
 
         if (IsKeyPressed(KEY_B)) {
             box.ResetToOrigin();
+            // Reset level switching state
+            collision_with_gorilla = false;
+            showing_success = false;
+            loading_next_level = false;
+            level_switch_timer = 0.0f;
+            loading_timer = 0.0f;
             std::cout << "Scene reset - box returned to origin" << std::endl;
         }
 
@@ -205,6 +213,13 @@ int main(int argc, char* argv[]) {
                     box.has_prediction_start = false;
                     box.is_colliding = false;
                     
+                    // Reset level switching state
+                    collision_with_gorilla = false;
+                    showing_success = false;
+                    loading_next_level = false;
+                    level_switch_timer = 0.0f;
+                    loading_timer = 0.0f;
+                    
                     std::cout << "Level loaded successfully!" << std::endl;
                 }
             }
@@ -217,8 +232,8 @@ int main(int argc, char* argv[]) {
             all_platforms[i].log_slice_texture = &log_slice_tex; // Middle slice
         }
 
-        // Only update game logic when level selector is not active
-        if (!level_selector.is_active) {
+        // Only update game logic when level selector is not active and not loading
+        if (!level_selector.is_active && !loading_next_level) {
             Vector2 world_mouse_pos = GetWorldMousePosition(camera.camera);
     
             bool was_grabbed_last_frame = box.is_grabbed;
@@ -228,6 +243,11 @@ int main(int argc, char* argv[]) {
                 box.velocity = { 0.0f, 0.0f };
                 box.acceleration = { 0.0f, 0.0f };
                 box.ghost_calculated = false;
+                
+                // Reset level switching state when box is grabbed
+                collision_with_gorilla = false;
+                showing_success = false;
+                level_switch_timer = 0.0f;
             }
 
             // Check if box was just released
@@ -364,13 +384,85 @@ int main(int argc, char* argv[]) {
             if (toolbox_active) {
                 toolbox.Update(dt, all_platforms, box, gorilla, world_mouse_pos);  // Pass world coordinates
             }
+
+            // Check collision between box and gorilla
+            if (gorilla.CheckCollisionWithBox(box) && !collision_with_gorilla) {
+                collision_with_gorilla = true;
+                showing_success = true;
+                level_switch_timer = LEVEL_SWITCH_DELAY;
+                std::cout << "Box reached gorilla! Level switch in " << LEVEL_SWITCH_DELAY << " seconds..." << std::endl;
+            }
+
+            // Handle level switching timer
+            if (showing_success && level_switch_timer > 0.0f) {
+                level_switch_timer -= dt;
+                
+                if (level_switch_timer <= 0.0f) {
+                    // Start loading next level
+                    showing_success = false;
+                    loading_next_level = true;
+                    loading_timer = LOADING_DURATION;
+                    std::cout << "Starting level transition..." << std::endl;
+                }
+            }
         }
 
+        // Handle loading screen
+        if (loading_next_level) {
+            loading_timer -= GetFrameTime();
+            
+            if (loading_timer <= 0.0f) {
+                // Load next level
+                level_selector.LoadNewLevel(all_platforms, box, gorilla);
+                
+                // Reset physics state for both box and gorilla
+                box.velocity = { 0.0f, 0.0f };
+                box.acceleration = { 0.0f, 0.0f };
+                box.ghost_calculated = false;
+                box.multi_platform_ghost_calculated = false;
+                box.has_prediction_start = false;
+                box.is_colliding = false;
+                
+                // Reset level switching state
+                collision_with_gorilla = false;
+                showing_success = false;
+                loading_next_level = false;
+                level_switch_timer = 0.0f;
+                loading_timer = 0.0f;
+                
+                std::cout << "Next level loaded successfully!" << std::endl;
+            }
+        }
 
         BeginDrawing();
             ClearBackground(DARKGRAY);
             
-            if (!level_selector.is_active) {
+            if (loading_next_level) {
+                // Draw loading screen
+                DrawRectangle(0, 0, GetScreenWidth(), GetScreenHeight(), (Color){0, 0, 0, 200});
+                
+                float loading_progress = 1.0f - (loading_timer / LOADING_DURATION);
+                int bar_width = 400;
+                int bar_height = 20;
+                int bar_x = (GetScreenWidth() - bar_width) / 2;
+                int bar_y = GetScreenHeight() / 2;
+                
+                // Draw loading bar background
+                DrawRectangle(bar_x, bar_y, bar_width, bar_height, DARKGRAY);
+                DrawRectangle(bar_x, bar_y, (int)(bar_width * loading_progress), bar_height, GREEN);
+                DrawRectangleLines(bar_x, bar_y, bar_width, bar_height, WHITE);
+                
+                // Draw loading text
+                const char* loading_text = "Loading Next Level...";
+                int text_width = MeasureText(loading_text, 30);
+                DrawText(loading_text, (GetScreenWidth() - text_width) / 2, bar_y - 50, 30, WHITE);
+                
+                // Draw percentage
+                const char* percent_text = TextFormat("%.0f%%", loading_progress * 100);
+                int percent_width = MeasureText(percent_text, 20);
+                DrawText(percent_text, (GetScreenWidth() - percent_width) / 2, bar_y + 30, 20, WHITE);
+            }
+            else if (!level_selector.is_active) {
                 camera.FindBounds(all_platforms);
 
                 BeginMode2D(camera.camera);
@@ -394,9 +486,13 @@ int main(int argc, char* argv[]) {
 
                 EndMode2D();
 
-                // Check collision between box and gorilla
-                if (gorilla.CheckCollisionWithBox(box)) {
+                // Draw success message and countdown
+                if (showing_success) {
                     DrawText("Nice!", gorilla.position.x - 50, gorilla.position.y - 100, 20, GREEN);
+                    DrawText(TextFormat("Next level in: %.1f", level_switch_timer), gorilla.position.x - 80, gorilla.position.y - 70, 16, YELLOW);
+                    
+                    // Draw success overlay
+                    DrawRectangle(0, 0, GetScreenWidth(), GetScreenHeight(), (Color){0, 255, 0, 30});
                 }
 
                 if (toolbox_active) {
@@ -411,7 +507,6 @@ int main(int argc, char* argv[]) {
                     DrawText(TextFormat("Is colliding: %s", box.is_colliding ? "YES" : "NO"), 10, 130, 20, RAYWHITE);
                     DrawText(TextFormat("Trajectory segments: %d", (int)box.trajectory_segments.size()), 10, 160, 20, RAYWHITE);
                 }
-                
                 
                 // Show reference frame info
                 if (box.has_prediction_start && !box.trajectory_segments.empty()) {
