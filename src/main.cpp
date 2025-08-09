@@ -10,582 +10,610 @@ std::vector<Platform> all_platforms;
 
 typedef class Star {
 public:
-    Vector2 position;
-    float radius = 20.0f;
-    Color color = YELLOW;
-    bool is_grabbed = false;
-    void Draw() {
-        if (is_grabbed) return;
-        DrawCircleV(position, radius, PURPLE);
-        DrawCircleV(position, radius * 0.8f, YELLOW);
-    }
-    void CheckCollision(Spring spring){
-        // check if spring position + radius (end of spring) collides with star
-        if (CheckCollisionCircles(spring.position, spring.radius, position, radius)){
-            is_grabbed = true;
-        };
-    }
+   Vector2 position;
+   float radius = 20.0f;
+   Color color = YELLOW;
+   bool is_grabbed = false;
+   void Draw() {
+       if (is_grabbed) return;
+       DrawCircleV(position, radius, PURPLE);
+       DrawCircleV(position, radius * 0.8f, YELLOW);
+   }
+   void CheckCollision(Spring spring){
+       // check if spring position + radius (end of spring) collides with star
+       if (CheckCollisionCircles(spring.position, spring.radius, position, radius)){
+           is_grabbed = true;
+       };
+   }
 } Star; 
 
 Vector2 GetWorldMousePosition(Camera2D camera) {
-    return GetScreenToWorld2D(GetMousePosition(), camera);
+   return GetScreenToWorld2D(GetMousePosition(), camera);
 }
 
 void DrawDebugInfo(Spring spring){
-    float x_start = GetScreenWidth() - 300.0f;
-    float y_start = 10.0f;
-    DrawText(TextFormat("F = -k * x"), x_start, y_start, 20, RAYWHITE);
-    DrawText(TextFormat("(%.2f, %.2f) = -%.2f * %.2f", spring._force.x, spring._force.y, spring.spring_constant, spring._compression), x_start - 20, y_start + 20, 18, RAYWHITE);
-    // pendulum
-    // T = 2pi * sqrt(L / g)
-    DrawText(TextFormat("T = 2pi * sqrt(L / g)"), x_start, y_start + 60, 20, RAYWHITE);
-    float L = Vector2Distance(spring.anchor, spring.position);
-    float g = 9.81f; // gravity
-    float T = 2.0f * PI * sqrt(L / g);
-    DrawText(TextFormat("%.2f = 2pi * sqrt(%.2f / %.2f)", T, L, g), x_start - 20, y_start + 80, 18, RAYWHITE);
+   float x_start = GetScreenWidth() - 300.0f;
+   float y_start = 10.0f;
+   DrawText(TextFormat("F = -k * x"), x_start, y_start, 20, RAYWHITE);
+   DrawText(TextFormat("(%.2f, %.2f) = -%.2f * %.2f", spring._force.x, spring._force.y, spring.spring_constant, spring._compression), x_start - 20, y_start + 20, 18, RAYWHITE);
+   // pendulum
+   // T = 2pi * sqrt(L / g)
+   DrawText(TextFormat("T = 2pi * sqrt(L / g)"), x_start, y_start + 60, 20, RAYWHITE);
+   float L = Vector2Distance(spring.anchor, spring.position);
+   float g = 9.81f; // gravity
+   float T = 2.0f * PI * sqrt(L / g);
+   DrawText(TextFormat("%.2f = 2pi * sqrt(%.2f / %.2f)", T, L, g), x_start - 20, y_start + 80, 18, RAYWHITE);
 }
 
 void DrawDebugInfo2(Spring spring, Spring spring2){
-    float x_start = GetScreenWidth() - 300.0f;
-    float y_start = 50.0f;
-    DrawText(TextFormat("T = 2pi * sqrt(L / g)"), x_start, y_start + 60, 20, RAYWHITE);
-    float L_1 = Vector2Distance(spring.anchor, spring.position);
-    float L_2 = Vector2Distance(spring2.anchor, spring2.position);
-    float L = L_1 + L_2;
-    float g = 9.81f; // gravity
-    float T = 2.0f * PI * sqrt(L / g);
-    DrawText(TextFormat("%.2f = 2pi * sqrt(%.2f / %.2f)", T, L, g), x_start - 20, y_start + 80, 18, RAYWHITE);
+   float x_start = GetScreenWidth() - 300.0f;
+   float y_start = 50.0f;
+   DrawText(TextFormat("T = 2pi * sqrt(L / g)"), x_start, y_start + 60, 20, RAYWHITE);
+   float L_1 = Vector2Distance(spring.anchor, spring.position);
+   float L_2 = Vector2Distance(spring2.anchor, spring2.position);
+   float L = L_1 + L_2;
+   float g = 9.81f; // gravity
+   float T = 2.0f * PI * sqrt(L / g);
+   DrawText(TextFormat("%.2f = 2pi * sqrt(%.2f / %.2f)", T, L, g), x_start - 20, y_start + 80, 18, RAYWHITE);
 }
 
 void LoadPlatformConfigurationFromFile(const char* filename, std::vector<Platform>& platforms) {
-    std::ifstream file(filename);
-    
-    if (!file.is_open()) {
-        std::cerr << "Failed to open " << filename << std::endl;
-        return;
-    }
-    
-    platforms.clear();
-    
-    std::string line;
-    int platform_count = 0;
-    while (std::getline(file, line)) {
-        if (line.empty()) continue;
-        
-        char type;
-        float center_x, center_y, width, height, rotation;
-        
-        if (sscanf(line.c_str(), "%c, %f, %f, %f, %f, %f", 
-                   &type, &center_x, &center_y, &width, &height, &rotation) == 6) {
-            if (type == 'R') {
-                Vector2 pos = { center_x, center_y };
-                Vector2 size = { width, height };
-                
-                Platform new_platform(pos, size, rotation);
-                platforms.push_back(new_platform);
-                platform_count++;
-                std::cout << "Loaded platform " << platform_count << ": pos(" << pos.x << "," << pos.y 
-                         << ") size(" << size.x << "," << size.y << ") rot(" << rotation << ")" << std::endl;
-            }
-        } else {
-            std::cout << "Failed to parse line: " << line << std::endl;
-        }
-    }
-    
-    std::cout << "Platform configuration loaded from " << filename << " - " << platform_count << " platforms loaded" << std::endl;
-    file.close();
+   std::ifstream file(filename);
+   
+   if (!file.is_open()) {
+       std::cerr << "Failed to open " << filename << std::endl;
+       return;
+   }
+   
+   platforms.clear();
+   
+   std::string line;
+   int platform_count = 0;
+   while (std::getline(file, line)) {
+       if (line.empty()) continue;
+       
+       char type;
+       float center_x, center_y, width, height, rotation;
+       
+       if (sscanf(line.c_str(), "%c, %f, %f, %f, %f, %f", 
+                  &type, &center_x, &center_y, &width, &height, &rotation) == 6) {
+           if (type == 'R') {
+               Vector2 pos = { center_x, center_y };
+               Vector2 size = { width, height };
+               
+               Platform new_platform(pos, size, rotation);
+               platforms.push_back(new_platform);
+               platform_count++;
+               std::cout << "Loaded platform " << platform_count << ": pos(" << pos.x << "," << pos.y 
+                        << ") size(" << size.x << "," << size.y << ") rot(" << rotation << ")" << std::endl;
+           }
+       } else {
+           std::cout << "Failed to parse line: " << line << std::endl;
+       }
+   }
+   
+   std::cout << "Platform configuration loaded from " << filename << " - " << platform_count << " platforms loaded" << std::endl;
+   file.close();
 }
 
 int main(int argc, char* argv[]) {
-    const int screenWidth = 1280;
-    const int screenHeight = 720;
+   const int screenWidth = 1280;
+   const int screenHeight = 720;
 
-    SetConfigFlags(FLAG_MSAA_4X_HINT);
-    SetConfigFlags(FLAG_WINDOW_RESIZABLE);
-    InitWindow(screenWidth, screenHeight, "physics engine");
+   SetConfigFlags(FLAG_MSAA_4X_HINT);
+   SetConfigFlags(FLAG_WINDOW_RESIZABLE);
+   InitWindow(screenWidth, screenHeight, "physics engine");
 
-    Texture2D gorilla_tex = LoadTexture("../assets/gorilla.png");
-    Texture2D bananas_tex = LoadTexture("../assets/bananas.png");
-    Texture2D log_tex = LoadTexture("../assets/log.png");
-    Texture2D log_end_tex = LoadTexture("../assets/log_end.png");  // NEW
-    Texture2D log_slice_tex = LoadTexture("../assets/log_slice.png");  // NEW
+   Texture2D gorilla_tex = LoadTexture("../assets/gorilla.png");
+   Texture2D bananas_tex = LoadTexture("../assets/bananas.png");
+   Texture2D log_tex = LoadTexture("../assets/log.png");
+   Texture2D log_end_tex = LoadTexture("../assets/log_end.png");  // NEW
+   Texture2D log_slice_tex = LoadTexture("../assets/log_slice.png");  // NEW
 
-    float dt_modifier = 1.0f;
+   float dt_modifier = 1.0f;
 
-    SetTargetFPS(60);
+   SetTargetFPS(60);
 
-    // Initialize level selector
-    LevelSelector level_selector;
-    SimCamera camera;
+   // Initialize level selector
+   LevelSelector level_selector;
+   SimCamera camera;
 
-    // Level switching variables
-    bool collision_with_gorilla = false;
-    float level_switch_timer = 0.0f;
-    const float LEVEL_SWITCH_DELAY = 3.0f; // 2 seconds to show success message
-    bool showing_success = false;
-    bool loading_next_level = false;
-    float loading_timer = 0.0f;
-    const float LOADING_DURATION = 1.0f; // 1 second loading screen
+   // Static camera storage for transitions
+   static Camera2D stored_camera;
+   static bool camera_stored = false;
 
-    bool config_loaded = false;
-    for (int i = 1; i < argc; i++) {
-        if (strcmp(argv[i], "-f") == 0 && i + 1 < argc) {
-            // Load configuration from specified file
-            LoadPlatformConfigurationFromFile(argv[i + 1], all_platforms);
-            for (int i = 0; i < all_platforms.size(); i++) {
-                all_platforms[i].id = i;
-            }
-            config_loaded = true;
-            std::cout << "Loaded platform configuration from: " << argv[i + 1] << std::endl;
-            break;
-        }
-    }
+   // Level switching variables
+   bool collision_with_gorilla = false;
+   float level_switch_timer = 0.0f;
+   const float LEVEL_SWITCH_DELAY = 3.0f; // 2 seconds to show success message
+   bool showing_success = false;
+   bool loading_next_level = false;
+   float loading_timer = 0.0f;
+   const float LOADING_DURATION = 1.0f; // 1 second loading screen
 
-    // Only add default platforms if no config was loaded
-    if (!config_loaded) {
-        std::cout << "Using default platform configuration" << std::endl;
-        Vector2 plat_start = { screenWidth/2.0f, screenHeight };
-        Vector2 plat_size = { screenWidth, 320.0f };
-        Platform platform = {plat_start, plat_size};
+   bool config_loaded = false;
+   for (int i = 1; i < argc; i++) {
+       if (strcmp(argv[i], "-f") == 0 && i + 1 < argc) {
+           // Load configuration from specified file
+           LoadPlatformConfigurationFromFile(argv[i + 1], all_platforms);
+           for (int i = 0; i < all_platforms.size(); i++) {
+               all_platforms[i].id = i;
+           }
+           config_loaded = true;
+           std::cout << "Loaded platform configuration from: " << argv[i + 1] << std::endl;
+           break;
+       }
+   }
 
-        Vector2 plat_center_2 = { 375.0f, screenHeight - 50.0f };
-        Vector2 plat_size_2 = { 1050.0f, 325.0f };
-        float plat_rotation = 40.0f;
-        Platform platform2 = {plat_center_2, plat_size_2, plat_rotation};
-        
-        all_platforms.push_back(platform);
-        all_platforms.push_back(platform2);
-        
-        // Assign IDs to default platforms
-        for (int i = 0; i < all_platforms.size(); i++) {
-            all_platforms[i].id = i;
-        }
-    }
+   // Only add default platforms if no config was loaded
+   if (!config_loaded) {
+       std::cout << "Using default platform configuration" << std::endl;
+       Vector2 plat_start = { screenWidth/2.0f, screenHeight };
+       Vector2 plat_size = { screenWidth, 320.0f };
+       Platform platform = {plat_start, plat_size};
 
-    float dt = 1.0f / 30.0f; // Fixed time step for 60 FPS
+       Vector2 plat_center_2 = { 375.0f, screenHeight - 50.0f };
+       Vector2 plat_size_2 = { 1050.0f, 325.0f };
+       float plat_rotation = 40.0f;
+       Platform platform2 = {plat_center_2, plat_size_2, plat_rotation};
+       
+       all_platforms.push_back(platform);
+       all_platforms.push_back(platform2);
+       
+       // Assign IDs to default platforms
+       for (int i = 0; i < all_platforms.size(); i++) {
+           all_platforms[i].id = i;
+       }
+   }
 
-    Box box = Box(50, 50);
-    box.position = { 75.0f, screenHeight / 2.0f - 200.0f };
-    box.mass = 100.0f;
-    box.texture = &bananas_tex;
-    box.ghost_calculated = false;
+   float dt = 1.0f / 30.0f; // Fixed time step for 60 FPS
 
-    // Initialize Gorilla
-    Gorilla gorilla({screenWidth - 150.0f, 480.0f});
-    gorilla.texture = &gorilla_tex;
+   Box box = Box(50, 50);
+   box.position = { 75.0f, screenHeight / 2.0f - 200.0f };
+   box.mass = 100.0f;
+   box.texture = &bananas_tex;
+   box.ghost_calculated = false;
 
-    Toolbox toolbox;
-    bool toolbox_active = true;
-    float box_force = 50.0f;
+   // Initialize Gorilla
+   Gorilla gorilla({screenWidth - 150.0f, 480.0f});
+   gorilla.texture = &gorilla_tex;
 
-    while (!WindowShouldClose()) {
-        dt = 1.0f / (30.0f * dt_modifier);
+   Toolbox toolbox;
+   bool toolbox_active = true;
+   float box_force = 50.0f;
 
-        // Handle level selector
-        if (IsKeyPressed(KEY_M)) {
-            level_selector.is_active = !level_selector.is_active;
-        }
+   while (!WindowShouldClose()) {
+       dt = 1.0f / (30.0f * dt_modifier);
 
-        if (IsKeyPressed(KEY_B)) {
-            box.ResetToOrigin();
-            // Reset level switching state
-            collision_with_gorilla = false;
-            showing_success = false;
-            loading_next_level = false;
-            level_switch_timer = 0.0f;
-            loading_timer = 0.0f;
-            std::cout << "Scene reset - box returned to origin" << std::endl;
-        }
+       // Handle level selector
+       if (IsKeyPressed(KEY_M)) {
+           level_selector.is_active = !level_selector.is_active;
+       }
 
-        if (level_selector.is_active) {
-            level_selector.Update();
-            
-            // Load selected level
-            if (IsKeyPressed(KEY_ENTER)) {
-                if (level_selector.LoadSelectedLevel(all_platforms, box, gorilla)) {
-                    level_selector.is_active = false;
-                    
-                    // Reset physics state for both box and gorilla
-                    box.velocity = { 0.0f, 0.0f };
-                    box.acceleration = { 0.0f, 0.0f };
-                    box.ghost_calculated = false;
-                    box.multi_platform_ghost_calculated = false;
-                    box.has_prediction_start = false;
-                    box.is_colliding = false;
-                    
-                    // Reset level switching state
-                    collision_with_gorilla = false;
-                    showing_success = false;
-                    loading_next_level = false;
-                    level_switch_timer = 0.0f;
-                    loading_timer = 0.0f;
-                    
-                    std::cout << "Level loaded successfully!" << std::endl;
-                }
-            }
-        }
+       if (IsKeyPressed(KEY_B)) {
+           box.ResetToOrigin();
+           // Reset level switching state
+           collision_with_gorilla = false;
+           showing_success = false;
+           loading_next_level = false;
+           level_switch_timer = 0.0f;
+           loading_timer = 0.0f;
+           std::cout << "Scene reset - box returned to origin" << std::endl;
+       }
 
-        // assign platform textures
-        for (int i = 0; i < all_platforms.size(); i++) {
-            all_platforms[i].log_texture = &log_tex;          // Start piece
-            all_platforms[i].log_end_texture = &log_end_tex;  // End piece
-            all_platforms[i].log_slice_texture = &log_slice_tex; // Middle slice
-        }
+       if (level_selector.is_active) {
+           level_selector.Update();
+           
+           // Load selected level
+           if (IsKeyPressed(KEY_ENTER)) {
+               if (level_selector.LoadSelectedLevel(all_platforms, box, gorilla)) {
+                   level_selector.is_active = false;
+                   
+                   // Reset physics state for both box and gorilla
+                   box.velocity = { 0.0f, 0.0f };
+                   box.acceleration = { 0.0f, 0.0f };
+                   box.ghost_calculated = false;
+                   box.multi_platform_ghost_calculated = false;
+                   box.has_prediction_start = false;
+                   box.is_colliding = false;
+                   
+                   // Reset level switching state
+                   collision_with_gorilla = false;
+                   showing_success = false;
+                   loading_next_level = false;
+                   level_switch_timer = 0.0f;
+                   loading_timer = 0.0f;
+                   
+                   std::cout << "Level loaded successfully!" << std::endl;
+               }
+           }
+       }
 
-        // Only update game logic when level selector is not active and not loading
-        if (!level_selector.is_active && !loading_next_level) {
-            Vector2 world_mouse_pos = GetWorldMousePosition(camera.camera);
-    
-            bool was_grabbed_last_frame = box.is_grabbed;
-            box.CheckGrab(world_mouse_pos);  // Pass world coordinates
-            if (box.is_grabbed) {
-                box.Grab(world_mouse_pos);   // Pass world coordinates
-                box.velocity = { 0.0f, 0.0f };
-                box.acceleration = { 0.0f, 0.0f };
-                box.ghost_calculated = false;
-                
-                // Reset level switching state when box is grabbed
-                collision_with_gorilla = false;
-                showing_success = false;
-                level_switch_timer = 0.0f;
-            }
+       // assign platform textures
+       for (int i = 0; i < all_platforms.size(); i++) {
+           all_platforms[i].log_texture = &log_tex;          // Start piece
+           all_platforms[i].log_end_texture = &log_end_tex;  // End piece
+           all_platforms[i].log_slice_texture = &log_slice_tex; // Middle slice
+       }
 
-            // Check if box was just released
-            if (was_grabbed_last_frame && !box.is_grabbed) {
-                // Reset ghost calculation when box is released
-                box.ghost_calculated = false;
-                box.multi_platform_ghost_calculated = false;
-                box.has_prediction_start = false;
-                
-                // If box is already on a platform when released, set prediction start immediately
-                if (box.is_colliding) {
-                    box.SetPredictionStartPosition();
-                    box.CalculateGhostTrajectory(all_platforms);
-                }
-            }
+       // Only update game logic when level selector is not active and not loading
+       if (!level_selector.is_active && !loading_next_level) {
+           Vector2 world_mouse_pos = GetWorldMousePosition(camera.camera);
+   
+           bool was_grabbed_last_frame = box.is_grabbed;
+           box.CheckGrab(world_mouse_pos);  // Pass world coordinates
+           if (box.is_grabbed) {
+               box.Grab(world_mouse_pos);   // Pass world coordinates
+               box.velocity = { 0.0f, 0.0f };
+               box.acceleration = { 0.0f, 0.0f };
+               box.ghost_calculated = false;
+               
+               // Reset level switching state when box is grabbed
+               collision_with_gorilla = false;
+               showing_success = false;
+               level_switch_timer = 0.0f;
+           }
 
-            // Handle platform editing and deletion (only when not in level selector)
-            int platform_to_delete = -1;
-    
-            for (int i = 0; i < all_platforms.size(); i++) {
-                Platform& platform = all_platforms[i];
-                
-                platform.CheckResize(world_mouse_pos);  // Pass world coordinates
-                if (platform.is_resizing) {
-                    platform.HandleResize(world_mouse_pos);  // Pass world coordinates
-                    platform.is_selected = true;
-                } else {
-                    platform.CheckGrab(world_mouse_pos);  // Pass world coordinates
-                    if (platform.is_grabbed) {
-                        platform.is_selected = true;
-                        platform.Grab(world_mouse_pos);  // Pass world coordinates
-                        
-                        if (IsKeyPressed(KEY_D)) {
-                            platform_to_delete = i;
-                        }
-                    } else {
-                        platform.is_selected = false;
-                    }
-                }
-                
-                if (platform.is_selected) {
-                    if (IsKeyDown(KEY_Z)){
-                        platform.rotation += 1.0f;
-                    } else if (IsKeyDown(KEY_C)) {
-                        platform.rotation -= 1.0f;
-                    }
-                }
-            }
-            
-            // Handle gorilla editing - ONLY in edit mode (same as platforms)
-            if (edit_mode) {
-                gorilla.CheckGrab(world_mouse_pos);  // Pass world coordinates
-                if (gorilla.is_grabbed) {
-                    gorilla.Grab(world_mouse_pos);   // Pass world coordinates
-                }
-            }
-            
-            // Delete the marked platform
-            if (platform_to_delete >= 0) {
-                all_platforms.erase(all_platforms.begin() + platform_to_delete);
-                std::cout << "Deleted platform " << platform_to_delete << std::endl;
-                
-                // Reassign IDs to maintain consistency
-                for (int i = 0; i < all_platforms.size(); i++) {
-                    all_platforms[i].id = i;
-                }
-                
-                // Reset box platform tracking to prevent invalid platform ID access
-                box.current_platform_id = -1;
-                box.last_platform_id = -1;
-                box.is_colliding = false;
-                box.was_colliding_last_frame = false;
-                
-                // Clear trajectory segments to prevent dangling platform pointers
-                box.trajectory_segments.clear();
-                box.projectile_trajectory_points.clear();
-                
-                box.ghost_calculated = false;
-                box.multi_platform_ghost_calculated = false;
-                box.has_prediction_start = false;
-                
-                if (box.is_colliding) {
-                    box.SetPredictionStartPosition();
-                    box.CalculateGhostTrajectory(all_platforms);
-                }
-            }
+           // Check if box was just released
+           if (was_grabbed_last_frame && !box.is_grabbed) {
+               // Reset ghost calculation when box is released
+               box.ghost_calculated = false;
+               box.multi_platform_ghost_calculated = false;
+               box.has_prediction_start = false;
+               
+               // If box is already on a platform when released, set prediction start immediately
+               if (box.is_colliding) {
+                   box.SetPredictionStartPosition();
+                   box.CalculateGhostTrajectory(all_platforms);
+               }
+           }
 
-            // Handle other key inputs (only when level selector is not active)
-            if (IsKeyPressed(KEY_TAB)){
-                toolbox_active = !toolbox_active;
-            }
+           // Handle platform editing and deletion (only when not in level selector)
+           int platform_to_delete = -1;
+   
+           for (int i = 0; i < all_platforms.size(); i++) {
+               Platform& platform = all_platforms[i];
+               
+               platform.CheckResize(world_mouse_pos);  // Pass world coordinates
+               if (platform.is_resizing) {
+                   platform.HandleResize(world_mouse_pos);  // Pass world coordinates
+                   platform.is_selected = true;
+               } else {
+                   platform.CheckGrab(world_mouse_pos);  // Pass world coordinates
+                   if (platform.is_grabbed) {
+                       platform.is_selected = true;
+                       platform.Grab(world_mouse_pos);  // Pass world coordinates
+                       
+                       if (IsKeyPressed(KEY_D)) {
+                           platform_to_delete = i;
+                       }
+                   } else {
+                       platform.is_selected = false;
+                   }
+               }
+               
+               if (platform.is_selected) {
+                   if (IsKeyDown(KEY_Z)){
+                       platform.rotation += 1.0f;
+                   } else if (IsKeyDown(KEY_C)) {
+                       platform.rotation -= 1.0f;
+                   }
+               }
+           }
+           
+           // Handle gorilla editing - ONLY in edit mode (same as platforms)
+           if (edit_mode) {
+               gorilla.CheckGrab(world_mouse_pos);  // Pass world coordinates
+               if (gorilla.is_grabbed) {
+                   gorilla.Grab(world_mouse_pos);   // Pass world coordinates
+               }
+           }
+           
+           // Delete the marked platform
+           if (platform_to_delete >= 0) {
+               all_platforms.erase(all_platforms.begin() + platform_to_delete);
+               std::cout << "Deleted platform " << platform_to_delete << std::endl;
+               
+               // Reassign IDs to maintain consistency
+               for (int i = 0; i < all_platforms.size(); i++) {
+                   all_platforms[i].id = i;
+               }
+               
+               // Reset box platform tracking to prevent invalid platform ID access
+               box.current_platform_id = -1;
+               box.last_platform_id = -1;
+               box.is_colliding = false;
+               box.was_colliding_last_frame = false;
+               
+               // Clear trajectory segments to prevent dangling platform pointers
+               box.trajectory_segments.clear();
+               box.projectile_trajectory_points.clear();
+               
+               box.ghost_calculated = false;
+               box.multi_platform_ghost_calculated = false;
+               box.has_prediction_start = false;
+               
+               if (box.is_colliding) {
+                   box.SetPredictionStartPosition();
+                   box.CalculateGhostTrajectory(all_platforms);
+               }
+           }
 
-            if (IsKeyPressed(KEY_LEFT)){
-                box_force -= 1.0f;
-            } else if (IsKeyPressed(KEY_RIGHT)){
-                box_force += 1.0f;
-            }
-            if (IsKeyPressed(KEY_SPACE)){
-                box.acceleration = { box_force, 0.0f };
-                box.velocity = { box_force, 0.0f };
-            }
+           // Handle other key inputs (only when level selector is not active)
+           if (IsKeyPressed(KEY_TAB)){
+               toolbox_active = !toolbox_active;
+           }
 
-            if (IsKeyPressed(KEY_PERIOD)){
-                box.mu_kinetic += 0.01f;
-            } else if (IsKeyPressed(KEY_COMMA)){
-                box.mu_kinetic -= 0.01f;
-            }
+           if (IsKeyPressed(KEY_LEFT)){
+               box_force -= 1.0f;
+           } else if (IsKeyPressed(KEY_RIGHT)){
+               box_force += 1.0f;
+           }
+           if (IsKeyPressed(KEY_SPACE)){
+               box.acceleration = { box_force, 0.0f };
+               box.velocity = { box_force, 0.0f };
+           }
 
-            if (IsKeyPressed(KEY_SEMICOLON)){
-                box.mu_kinetic -= 0.1f;
-            } else if (IsKeyPressed(KEY_APOSTROPHE)){
-                box.mu_kinetic += 0.1f;
-            }
+           if (IsKeyPressed(KEY_PERIOD)){
+               box.mu_kinetic += 0.01f;
+           } else if (IsKeyPressed(KEY_COMMA)){
+               box.mu_kinetic -= 0.01f;
+           }
 
-            if (IsKeyPressed(KEY_MINUS)){
-                dt_modifier += 0.5f;
-            } else if (IsKeyPressed(KEY_EQUAL)){
-                dt_modifier -= 0.5f;
-            }
+           if (IsKeyPressed(KEY_SEMICOLON)){
+               box.mu_kinetic -= 0.1f;
+           } else if (IsKeyPressed(KEY_APOSTROPHE)){
+               box.mu_kinetic += 0.1f;
+           }
 
-            if (IsKeyPressed(KEY_E)){
-                edit_mode = !edit_mode;
-            }
+           if (IsKeyPressed(KEY_MINUS)){
+               dt_modifier += 0.5f;
+           } else if (IsKeyPressed(KEY_EQUAL)){
+               dt_modifier -= 0.5f;
+           }
 
-            // Update game logic
-            if (!edit_mode) {
-                box.was_colliding_last_frame = box.is_colliding;
-                box.last_platform_id = box.current_platform_id;
-                
-                box.CheckPlatformCollisionTwoLine(all_platforms);
-                box.Update(dt, all_platforms);
-            }
+           if (IsKeyPressed(KEY_E)){
+               edit_mode = !edit_mode;
+           }
 
-            if (toolbox_active) {
-                toolbox.Update(dt, all_platforms, box, gorilla, world_mouse_pos);  // Pass world coordinates
-            }
+           // Update game logic
+           if (!edit_mode) {
+               box.was_colliding_last_frame = box.is_colliding;
+               box.last_platform_id = box.current_platform_id;
+               
+               box.CheckPlatformCollisionTwoLine(all_platforms);
+               box.Update(dt, all_platforms);
+           }
 
-            // Check collision between box and gorilla
-            if (gorilla.CheckCollisionWithBox(box) && !collision_with_gorilla) {
-                collision_with_gorilla = true;
-                showing_success = true;
-                level_switch_timer = LEVEL_SWITCH_DELAY;
-                std::cout << "Box reached gorilla! Level switch in " << LEVEL_SWITCH_DELAY << " seconds..." << std::endl;
-            }
+           if (toolbox_active) {
+               toolbox.Update(dt, all_platforms, box, gorilla, world_mouse_pos);  // Pass world coordinates
+           }
 
-            // Handle level switching timer
-            if (showing_success && level_switch_timer > 0.0f) {
-                level_switch_timer -= dt;
-                
-                if (level_switch_timer <= 0.0f) {
-                    // Start loading next level
-                    showing_success = false;
-                    loading_next_level = true;
-                    loading_timer = LOADING_DURATION;
-                    std::cout << "Starting level transition..." << std::endl;
-                }
-            }
-        }
+           // Check collision between box and gorilla
+           if (gorilla.CheckCollisionWithBox(box) && !collision_with_gorilla) {
+               collision_with_gorilla = true;
+               showing_success = true;
+               level_switch_timer = LEVEL_SWITCH_DELAY;
+               std::cout << "Box reached gorilla! Level switch in " << LEVEL_SWITCH_DELAY << " seconds..." << std::endl;
+           }
 
-        // Handle loading screen and transitions
-        // Handle loading screen and transitions
-        if (loading_next_level) {
-            if (level_selector.is_transitioning) {
-                // Update the animated transition
-                level_selector.UpdateTransition(GetFrameTime(), all_platforms, box, gorilla);
+           // Handle level switching timer
+           if (showing_success && level_switch_timer > 0.0f) {
+               level_switch_timer -= dt;
+               
+               if (level_switch_timer <= 0.0f) {
+                   // Start loading next level
+                   showing_success = false;
+                   loading_next_level = true;
+                   loading_timer = LOADING_DURATION;
+                   std::cout << "Starting level transition..." << std::endl;
+               }
+           }
+       }
 
-                // Reset physics state during transition
-                box.velocity = { 0.0f, 0.0f };
-                box.acceleration = { 0.0f, 0.0f };
-                box.ghost_calculated = false;
-                box.multi_platform_ghost_calculated = false;
-                box.has_prediction_start = false;
-                box.is_colliding = false;
-            } else {
-                loading_timer -= GetFrameTime();
+       // Handle loading screen and transitions
+       if (loading_next_level) {
+           if (level_selector.is_transitioning) {
+               // Update the animated transition
+               level_selector.UpdateTransition(GetFrameTime(), all_platforms, box, gorilla);
 
-                if (loading_timer <= 0.0f) {
-                    // Start the animated transition
-                    level_selector.LoadNewLevel(all_platforms, box, gorilla);
+               // Reset physics state during transition
+               box.velocity = { 0.0f, 0.0f };
+               box.acceleration = { 0.0f, 0.0f };
+               box.ghost_calculated = false;
+               box.multi_platform_ghost_calculated = false;
+               box.has_prediction_start = false;
+               box.is_colliding = false;
+           } else {
+               loading_timer -= GetFrameTime();
 
-                    if (!level_selector.is_transitioning) {
-                        // If transition didn't start (error), finish loading
-                        loading_next_level = false;
-                        collision_with_gorilla = false;
-                        showing_success = false;
-                        level_switch_timer = 0.0f;
-                        loading_timer = 0.0f;
-                    }
-                }
-            }
+               if (loading_timer <= 0.0f) {
+                   // Start the animated transition
+                   level_selector.LoadNewLevel(all_platforms, box, gorilla);
 
-            // Check if transition is complete
-            if (!level_selector.is_transitioning && loading_timer <= 0.0f) {
-                loading_next_level = false;
-                collision_with_gorilla = false;
-                showing_success = false;
-                level_switch_timer = 0.0f;
-                loading_timer = 0.0f;
-                std::cout << "Level transition complete!" << std::endl;
-            }
-        }
+                   if (!level_selector.is_transitioning) {
+                       // If transition didn't start (error), finish loading
+                       loading_next_level = false;
+                       collision_with_gorilla = false;
+                       showing_success = false;
+                       level_switch_timer = 0.0f;
+                       loading_timer = 0.0f;
+                   }
+               }
+           }
 
-        BeginDrawing();
-            ClearBackground(DARKGRAY);
+           // Check if transition is complete
+           if (!level_selector.is_transitioning && loading_timer <= 0.0f) {
+               loading_next_level = false;
+               collision_with_gorilla = false;
+               showing_success = false;
+               level_switch_timer = 0.0f;
+               loading_timer = 0.0f;
+               std::cout << "Level transition complete!" << std::endl;
+           }
+       }
 
-            // Always show the game view (no more black loading screen)
-            if (!level_selector.is_active) {
-                camera.FindBounds(all_platforms);
-            
-                BeginMode2D(camera.camera);
-            
-                    for (Platform& plat : all_platforms) {
-                        plat.Draw();
-                    }
-                
-                    if (box.has_prediction_start && !loading_next_level) {
-                        box.DrawMultiPlatformGhost(all_platforms);
-                    }
-                
-                    // Update and draw gorilla
-                    gorilla.Update(dt);
-                    gorilla.Draw();
-                
-                    box.Draw();
+       BeginDrawing();
+           ClearBackground(DARKGRAY);
 
-                    // Only draw vectors when not transitioning
-                    if (!loading_next_level) {
-                        box.DrawVectors();
-                        box.DrawTwoLineCollisionDebug(all_platforms);
-                    }
-                
-                EndMode2D();
-                
-                // Draw success message and countdown
-                if (showing_success) {
-                    DrawText("Nice!", gorilla.position.x - 50, gorilla.position.y - 100, 20, GREEN);
-                    DrawText(TextFormat("Next level in: %.1f", level_switch_timer), gorilla.position.x - 80, gorilla.position.y - 70, 16, YELLOW);
+           // Always show the game view (no more black loading screen)
+           if (!level_selector.is_active) {
+               // CRITICAL FIX: Camera handling during transitions
+               if (level_selector.is_transitioning) {
+                   // Use stored camera during transition to keep view stable
+                   if (camera_stored) {
+                       camera.camera = stored_camera;
+                   }
+               } else {
+                   // Normal camera operation - update bounds
+                   camera.FindBounds(all_platforms);
+                   stored_camera = camera.camera; // Store for next transition
+                   camera_stored = true;
+               }
+           
+               BeginMode2D(camera.camera);
+           
+                   for (Platform& plat : all_platforms) {
+                       plat.Draw();
+                   }
+               
+                   if (box.has_prediction_start && !loading_next_level) {
+                       box.DrawMultiPlatformGhost(all_platforms);
+                   }
+               
+                   // Update and draw gorilla
+                   gorilla.Update(dt);
+                   gorilla.Draw();
+               
+                   box.Draw();
 
-                    // Draw success overlay
-                    DrawRectangle(0, 0, GetScreenWidth(), GetScreenHeight(), (Color){0, 255, 0, 30});
-                }
-            
-                // Draw transition overlay and progress
-                if (loading_next_level) {
-                    // Semi-transparent overlay during transition
-                    DrawRectangle(0, 0, GetScreenWidth(), GetScreenHeight(), (Color){0, 0, 0, 50});
+                   // Only draw vectors when not transitioning
+                   if (!loading_next_level) {
+                       box.DrawVectors();
+                       box.DrawTwoLineCollisionDebug(all_platforms);
+                   }
+               
+               EndMode2D();
+               
+               // TRANSITION DEBUG INFO (drawn outside camera view)
+               if (level_selector.is_transitioning) {
+                   DrawText("TRANSITIONING - CAMERA LOCKED", 10, 10, 20, RED);
+                   DrawText(TextFormat("Progress: %.1f%%", (level_selector.transition_timer / level_selector.TRANSITION_DURATION) * 100), 10, 40, 16, YELLOW);
+                   
+                   // Show platform positions
+                   int y_offset = 70;
+                   int platform_count = 0;
+                   for (size_t i = 0; i < all_platforms.size() && platform_count < 6; i++, platform_count++) {
+                       DrawText(TextFormat("Platform %d: (%.0f, %.0f)", platform_count, all_platforms[i].position.x, all_platforms[i].position.y), 
+                                10, y_offset + platform_count * 20, 14, WHITE);
+                   }
+               }
+               
+               // Draw success message and countdown
+               if (showing_success) {
+                   DrawText("Nice!", gorilla.position.x - 50, gorilla.position.y - 100, 20, GREEN);
+                   DrawText(TextFormat("Next level in: %.1f", level_switch_timer), gorilla.position.x - 80, gorilla.position.y - 70, 16, YELLOW);
 
-                    if (level_selector.is_transitioning) {
-                        // Show transition progress
-                        float progress = level_selector.transition_timer / level_selector.TRANSITION_DURATION;
-                        const char* transition_text = "Level Transition...";
-                        int text_width = MeasureText(transition_text, 24);
-                        DrawText(transition_text, (GetScreenWidth() - text_width) / 2, 50, 24, WHITE);
+                   // Draw success overlay
+                   DrawRectangle(0, 0, GetScreenWidth(), GetScreenHeight(), (Color){0, 255, 0, 30});
+               }
+           
+               // Draw transition overlay and progress
+               if (loading_next_level) {
+                   // Semi-transparent overlay during transition
+                   DrawRectangle(0, 0, GetScreenWidth(), GetScreenHeight(), (Color){0, 0, 0, 50});
 
-                        // Progress bar
-                        int bar_width = 300;
-                        int bar_height = 8;
-                        int bar_x = (GetScreenWidth() - bar_width) / 2;
-                        int bar_y = 80;
+                   if (level_selector.is_transitioning) {
+                       // Show transition progress
+                       float progress = level_selector.transition_timer / level_selector.TRANSITION_DURATION;
+                       const char* transition_text = "Level Transition...";
+                       int text_width = MeasureText(transition_text, 24);
+                       DrawText(transition_text, (GetScreenWidth() - text_width) / 2, 50, 24, WHITE);
 
-                        DrawRectangle(bar_x, bar_y, bar_width, bar_height, DARKGRAY);
-                        DrawRectangle(bar_x, bar_y, (int)(bar_width * progress), bar_height, YELLOW);
-                        DrawRectangleLines(bar_x, bar_y, bar_width, bar_height, WHITE);
-                    } else {
-                        // Show initial loading message
-                        float progress = 1.0f - (loading_timer / LOADING_DURATION);
-                        const char* loading_text = "Preparing Level...";
-                        int text_width = MeasureText(loading_text, 24);
-                        DrawText(loading_text, (GetScreenWidth() - text_width) / 2, 50, 24, WHITE);
+                       // Progress bar
+                       int bar_width = 300;
+                       int bar_height = 8;
+                       int bar_x = (GetScreenWidth() - bar_width) / 2;
+                       int bar_y = 80;
 
-                        // Progress bar
-                        int bar_width = 300;
-                        int bar_height = 8;
-                        int bar_x = (GetScreenWidth() - bar_width) / 2;
-                        int bar_y = 80;
+                       DrawRectangle(bar_x, bar_y, bar_width, bar_height, DARKGRAY);
+                       DrawRectangle(bar_x, bar_y, (int)(bar_width * progress), bar_height, YELLOW);
+                       DrawRectangleLines(bar_x, bar_y, bar_width, bar_height, WHITE);
+                   } else {
+                       // Show initial loading message
+                       float progress = 1.0f - (loading_timer / LOADING_DURATION);
+                       const char* loading_text = "Preparing Level...";
+                       int text_width = MeasureText(loading_text, 24);
+                       DrawText(loading_text, (GetScreenWidth() - text_width) / 2, 50, 24, WHITE);
 
-                        DrawRectangle(bar_x, bar_y, bar_width, bar_height, DARKGRAY);
-                        DrawRectangle(bar_x, bar_y, (int)(bar_width * progress), bar_height, GREEN);
-                        DrawRectangleLines(bar_x, bar_y, bar_width, bar_height, WHITE);
-                    }
-                }
-            
-                if (toolbox_active && !loading_next_level) {
-                    toolbox.Draw(); 
-                }
-            
-                if (!loading_next_level) {
-                    DrawText("get the box to the green square!", 400, 200, 20, RAYWHITE);
-                
-                    // Debug ghost calculation status
-                    if (box.has_prediction_start) {
-                        DrawText(TextFormat("Multi-platform ghost: %s", box.multi_platform_ghost_calculated ? "YES" : "NO"), 10, 100, 20, RAYWHITE);
-                        DrawText(TextFormat("Is colliding: %s", box.is_colliding ? "YES" : "NO"), 10, 130, 20, RAYWHITE);
-                        DrawText(TextFormat("Trajectory segments: %d", (int)box.trajectory_segments.size()), 10, 160, 20, RAYWHITE);
-                    }
+                       // Progress bar
+                       int bar_width = 300;
+                       int bar_height = 8;
+                       int bar_x = (GetScreenWidth() - bar_width) / 2;
+                       int bar_y = 80;
 
-                    // Show reference frame info
-                    if (box.has_prediction_start && !box.trajectory_segments.empty()) {
-                        int reference_frame_count = 0;
-                        for (size_t i = 0; i < box.trajectory_segments.size(); i += 2) {
-                            reference_frame_count++;
-                        }
-                        DrawText(TextFormat("Reference frames: %d", reference_frame_count), 10, 190, 20, RAYWHITE);
-                    }
-                
-                    DrawText(TextFormat("Force: %.2f", box_force), 10, 10, 20, RAYWHITE);
-                    DrawText(TextFormat("Box Velocity: (%.2f, %.2f)", box.velocity.x, box.velocity.y), 10, 40, 20, RAYWHITE);
-                    DrawText(TextFormat("Box Friction (mu_f): %.2f", box.mu_kinetic), 10, 70, 20, RAYWHITE);
-                    DrawFPS(10, 10);
-                
-                    if (edit_mode) {
-                        DrawText("EDIT MODE", screenWidth - 140, screenHeight - 40, 20, RED);
-                        DrawText("Grab platform + D = Delete", screenWidth - 200, screenHeight - 70, 16, YELLOW);
-                    }
+                       DrawRectangle(bar_x, bar_y, bar_width, bar_height, DARKGRAY);
+                       DrawRectangle(bar_x, bar_y, (int)(bar_width * progress), bar_height, GREEN);
+                       DrawRectangleLines(bar_x, bar_y, bar_width, bar_height, WHITE);
+                   }
+               }
+           
+               if (toolbox_active && !loading_next_level) {
+                   toolbox.Draw(); 
+               }
+           
+               if (!loading_next_level && !level_selector.is_transitioning) {
+                   DrawText("get the box to the green square!", 400, 200, 20, RAYWHITE);
+               
+                   // Debug ghost calculation status
+                   if (box.has_prediction_start) {
+                       DrawText(TextFormat("Multi-platform ghost: %s", box.multi_platform_ghost_calculated ? "YES" : "NO"), 10, 100, 20, RAYWHITE);
+                       DrawText(TextFormat("Is colliding: %s", box.is_colliding ? "YES" : "NO"), 10, 130, 20, RAYWHITE);
+                       DrawText(TextFormat("Trajectory segments: %d", (int)box.trajectory_segments.size()), 10, 160, 20, RAYWHITE);
+                   }
 
-                    DrawText(TextFormat("Num Platforms: %d", all_platforms.size()), 50, 10, 20, RAYWHITE);
-                    if (toolbox.creating_platform) {
-                        DrawText("Creating Platform", 50, 40, 20, RAYWHITE);
-                    }
+                   // Show reference frame info
+                   if (box.has_prediction_start && !box.trajectory_segments.empty()) {
+                       int reference_frame_count = 0;
+                       for (size_t i = 0; i < box.trajectory_segments.size(); i += 2) {
+                           reference_frame_count++;
+                       }
+                       DrawText(TextFormat("Reference frames: %d", reference_frame_count), 10, 190, 20, RAYWHITE);
+                   }
+               
+                   DrawText(TextFormat("Force: %.2f", box_force), 10, 10, 20, RAYWHITE);
+                   DrawText(TextFormat("Box Velocity: (%.2f, %.2f)", box.velocity.x, box.velocity.y), 10, 40, 20, RAYWHITE);
+                   DrawText(TextFormat("Box Friction (mu_f): %.2f", box.mu_kinetic), 10, 70, 20, RAYWHITE);
+                   DrawFPS(10, 10);
+               
+                   if (edit_mode) {
+                       DrawText("EDIT MODE", screenWidth - 140, screenHeight - 40, 20, RED);
+                       DrawText("Grab platform + D = Delete", screenWidth - 200, screenHeight - 70, 16, YELLOW);
+                   }
 
-                    // Show level selector instruction
-                    DrawText("Press M for Level Select", 10, screenHeight - 30, 16, YELLOW);
-                }
-            }
+                   DrawText(TextFormat("Num Platforms: %d", all_platforms.size()), 50, 10, 20, RAYWHITE);
+                   if (toolbox.creating_platform) {
+                       DrawText("Creating Platform", 50, 40, 20, RAYWHITE);
+                   }
 
-            // Draw level selector (this will draw on top of everything)
-            level_selector.Draw();
+                   // Show level selector instruction
+                   DrawText("Press M for Level Select", 10, screenHeight - 30, 16, YELLOW);
+               }
+           }
 
-        EndDrawing();
-    }
+           // Draw level selector (this will draw on top of everything)
+           level_selector.Draw();
 
-    UnloadTexture(gorilla_tex);
-    UnloadTexture(bananas_tex);
-    UnloadTexture(log_tex);
-    UnloadTexture(log_end_tex);  
-    UnloadTexture(log_slice_tex);
-    
-    CloseWindow();
+       EndDrawing();
+   }
 
-    return 0;
+   UnloadTexture(gorilla_tex);
+   UnloadTexture(bananas_tex);
+   UnloadTexture(log_tex);
+   UnloadTexture(log_end_tex);  
+   UnloadTexture(log_slice_tex);
+   
+   CloseWindow();
+
+   return 0;
 }

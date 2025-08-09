@@ -83,27 +83,52 @@ void LevelSelector::UpdateTransition(float dt, std::vector<Platform>& platforms,
     float progress = transition_timer / TRANSITION_DURATION;
     progress = EaseInOutCubic(fminf(progress, 1.0f)); // Apply easing
     
-    // Update platform positions
-    platforms.clear();
-    for (auto& transition : transitioning_platforms) {
-        Platform animated_platform = transition.platform;
-        animated_platform.position = Vector2Lerp(transition.start_position, transition.target_position, progress);
-        
-        // Only add platforms that are still visible or moving in
-        if (!transition.is_old_platform || animated_platform.position.x > -2000.0f) {
-            platforms.push_back(animated_platform);
-        }
+    // Debug output every half second
+    static float last_debug_time = 0.0f;
+    last_debug_time += dt;
+    if (last_debug_time >= 0.5f) {
+        std::cout << "\n=== TRANSITION UPDATE ===" << std::endl;
+        std::cout << "Progress: " << (progress * 100.0f) << "%" << std::endl;
+        std::cout << "Transitioning platforms: " << transitioning_platforms.size() << std::endl;
+        last_debug_time = 0.0f;
     }
     
-    // Update box position
-    box.position = Vector2Lerp(box_transition.start_position, box_transition.target_position, progress);
+    // CRITICAL FIX: Clear platforms and rebuild from transitioning platforms
+    platforms.clear();
+    
+    // Process each transitioning platform
+    for (size_t i = 0; i < transitioning_platforms.size(); i++) {
+        auto& transition = transitioning_platforms[i];
+        Platform animated_platform = transition.platform;
+        
+        // Calculate current position using proper interpolation
+        Vector2 position_diff = Vector2Subtract(transition.target_position, transition.start_position);
+        animated_platform.position = Vector2Add(transition.start_position, Vector2Scale(position_diff, progress));
+        
+        // Debug: Show what's happening with each platform
+        if (last_debug_time == 0.0f) { // Only on debug frames
+            std::cout << "Platform " << i << " (" << (transition.is_old_platform ? "OLD" : "NEW") << "): "
+                      << "Start(" << transition.start_position.x << "," << transition.start_position.y << ") -> "
+                      << "Target(" << transition.target_position.x << "," << transition.target_position.y << ") = "
+                      << "Current(" << animated_platform.position.x << "," << animated_platform.position.y << ")" << std::endl;
+        }
+        
+        // ALWAYS add the platform during transition - no filtering
+        platforms.push_back(animated_platform);
+    }
+    
+    // Update box position  
+    Vector2 box_diff = Vector2Subtract(box_transition.target_position, box_transition.start_position);
+    box.position = Vector2Add(box_transition.start_position, Vector2Scale(box_diff, progress));
     box.origin_position = box_transition.target_position; // Update origin for reset functionality
     
     // Update gorilla position
-    gorilla.position = Vector2Lerp(gorilla_transition.start_position, gorilla_transition.target_position, progress);
+    Vector2 gorilla_diff = Vector2Subtract(gorilla_transition.target_position, gorilla_transition.start_position);
+    gorilla.position = Vector2Add(gorilla_transition.start_position, Vector2Scale(gorilla_diff, progress));
     
     // Check if transition is complete
     if (transition_timer >= TRANSITION_DURATION) {
+        std::cout << "\n=== TRANSITION COMPLETE ===" << std::endl;
         is_transitioning = false;
         transition_timer = 0.0f;
         
@@ -114,6 +139,7 @@ void LevelSelector::UpdateTransition(float dt, std::vector<Platform>& platforms,
                 Platform final_platform = transition.platform;
                 final_platform.position = transition.target_position;
                 platforms.push_back(final_platform);
+                std::cout << "Final platform at (" << final_platform.position.x << "," << final_platform.position.y << ")" << std::endl;
             }
         }
         
@@ -128,7 +154,7 @@ void LevelSelector::UpdateTransition(float dt, std::vector<Platform>& platforms,
         gorilla.position = gorilla_transition.target_position;
         
         transitioning_platforms.clear();
-        std::cout << "Level transition complete!" << std::endl;
+        std::cout << "Level transition complete with " << platforms.size() << " final platforms!" << std::endl;
     }
 }
 
@@ -234,26 +260,41 @@ void LevelSelector::StartTransition(const std::vector<Platform>& old_platforms, 
     is_transitioning = true;
     transition_timer = 0.0f;
     transitioning_platforms.clear();
+    
+    std::cout << "\n=== STARTING TRANSITION ===" << std::endl;
+    std::cout << "Old platforms: " << old_platforms.size() << std::endl;
+    std::cout << "New platforms: " << new_platforms.size() << std::endl;
         
     // Set up old platforms to slide out to the left
     for (const auto& platform : old_platforms) {
-    Vector2 target_pos = {platform.position.x - 1000.0f, platform.position.y};
-    transitioning_platforms.emplace_back(platform, platform.position, target_pos, true);
+        Vector2 target_pos = {platform.position.x - 3000.0f, platform.position.y}; // Even further left
+        transitioning_platforms.emplace_back(platform, platform.position, target_pos, true);
+        std::cout << "OLD Platform: (" << platform.position.x << ", " << platform.position.y 
+                  << ") -> (" << target_pos.x << ", " << target_pos.y << ")" << std::endl;
     }
     
     // Set up new platforms to slide in from the right
     for (const auto& platform : new_platforms) {
-    Vector2 start_pos = {platform.position.x + 1000.0f, platform.position.y};
-    transitioning_platforms.emplace_back(platform, start_pos, platform.position, false);
+        Vector2 start_pos = {platform.position.x + 3000.0f, platform.position.y}; // Even further right
+        transitioning_platforms.emplace_back(platform, start_pos, platform.position, false);
+        std::cout << "NEW Platform: (" << start_pos.x << ", " << start_pos.y 
+                  << ") -> (" << platform.position.x << ", " << platform.position.y << ")" << std::endl;
     }
     
     // Set up box transition
     box_transition.start_position = old_box_pos;
     box_transition.target_position = new_box_pos;
+    std::cout << "Box: (" << old_box_pos.x << ", " << old_box_pos.y 
+              << ") -> (" << new_box_pos.x << ", " << new_box_pos.y << ")" << std::endl;
     
     // Set up gorilla transition
     gorilla_transition.start_position = old_gorilla_pos;
     gorilla_transition.target_position = new_gorilla_pos;
+    std::cout << "Gorilla: (" << old_gorilla_pos.x << ", " << old_gorilla_pos.y 
+              << ") -> (" << new_gorilla_pos.x << ", " << new_gorilla_pos.y << ")" << std::endl;
+    
+    std::cout << "Total transitioning platforms: " << transitioning_platforms.size() << std::endl;
+    std::cout << "=== TRANSITION SETUP COMPLETE ===" << std::endl;
 }
 
 bool LevelSelector::LoadSelectedLevel(std::vector<Platform>& platforms, Box& box, Gorilla& gorilla) {
