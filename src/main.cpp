@@ -125,7 +125,7 @@ int main(int argc, char* argv[]) {
    // Level switching variables
    bool collision_with_gorilla = false;
    float level_switch_timer = 0.0f;
-   const float LEVEL_SWITCH_DELAY = 3.0f; // 2 seconds to show success message
+   const float LEVEL_SWITCH_DELAY = 3.0f; // 3 seconds to show success message
    bool showing_success = false;
    bool loading_next_level = false;
    float loading_timer = 0.0f;
@@ -367,9 +367,9 @@ int main(int argc, char* argv[]) {
            }
 
            if (IsKeyPressed(KEY_MINUS)){
-               dt_modifier += 0.5f;
+               dt_modifier += 0.51f;
            } else if (IsKeyPressed(KEY_EQUAL)){
-               dt_modifier -= 0.5f;
+               dt_modifier -= 0.51f;
            }
 
            if (IsKeyPressed(KEY_E)){
@@ -414,8 +414,8 @@ int main(int argc, char* argv[]) {
        // Handle loading screen and transitions
        if (loading_next_level) {
            if (level_selector.is_transitioning) {
-               // Update the animated transition
-               level_selector.UpdateTransition(GetFrameTime(), all_platforms, box, gorilla);
+               // Update the sequential transition
+               level_selector.UpdateSequentialTransition(GetFrameTime(), all_platforms, box, gorilla);
 
                // Reset physics state during transition
                box.velocity = { 0.0f, 0.0f };
@@ -428,7 +428,7 @@ int main(int argc, char* argv[]) {
                loading_timer -= GetFrameTime();
 
                if (loading_timer <= 0.0f) {
-                   // Start the animated transition
+                   // Start the sequential transition
                    level_selector.LoadNewLevel(all_platforms, box, gorilla);
 
                    if (!level_selector.is_transitioning) {
@@ -458,7 +458,7 @@ int main(int argc, char* argv[]) {
 
            // Always show the game view (no more black loading screen)
            if (!level_selector.is_active) {
-               // CRITICAL FIX: Camera handling during transitions
+               // Camera handling during transitions
                if (level_selector.is_transitioning) {
                    // Use stored camera during transition to keep view stable
                    if (camera_stored) {
@@ -497,11 +497,23 @@ int main(int argc, char* argv[]) {
                
                // TRANSITION DEBUG INFO (drawn outside camera view)
                if (level_selector.is_transitioning) {
-                   DrawText("TRANSITIONING - CAMERA LOCKED", 10, 10, 20, RED);
-                   DrawText(TextFormat("Progress: %.1f%%", (level_selector.transition_timer / level_selector.TRANSITION_DURATION) * 100), 10, 40, 16, YELLOW);
+                   DrawText("SEQUENTIAL TRANSITION IN PROGRESS", 10, 10, 20, RED);
+                   
+                   // Show current state
+                   const char* state_names[] = {
+                       "IDLE", "LOADING_NEW_PLATFORMS", "MOVING_OUT_OLD_PLATFORMS", 
+                       "MOVING_IN_NEW_PLATFORMS", "MOVING_BOX_AND_GORILLA", "CLEANUP_COMPLETE"
+                   };
+                   const char* current_state_name = state_names[(int)level_selector.current_transition_state];
+                   DrawText(TextFormat("State: %s", current_state_name), 10, 40, 16, YELLOW);
+                   
+                   // Show platform counts
+                   DrawText(TextFormat("Old platforms: %d, New platforms: %d", 
+                                      (int)level_selector.old_platforms_queue.size(),
+                                      (int)level_selector.new_platforms_queue.size()), 10, 60, 14, WHITE);
                    
                    // Show platform positions
-                   int y_offset = 70;
+                   int y_offset = 90;
                    int platform_count = 0;
                    for (size_t i = 0; i < all_platforms.size() && platform_count < 6; i++, platform_count++) {
                        DrawText(TextFormat("Platform %d: (%.0f, %.0f)", platform_count, all_platforms[i].position.x, all_platforms[i].position.y), 
@@ -524,21 +536,33 @@ int main(int argc, char* argv[]) {
                    DrawRectangle(0, 0, GetScreenWidth(), GetScreenHeight(), (Color){0, 0, 0, 50});
 
                    if (level_selector.is_transitioning) {
-                       // Show transition progress
-                       float progress = level_selector.transition_timer / level_selector.TRANSITION_DURATION;
-                       const char* transition_text = "Level Transition...";
+                       // Show current transition state
+                       const char* state_names[] = {
+                           "IDLE", "LOADING_NEW_PLATFORMS", "MOVING_OUT_OLD_PLATFORMS", 
+                           "MOVING_IN_NEW_PLATFORMS", "MOVING_BOX_AND_GORILLA", "CLEANUP_COMPLETE"
+                       };
+                       
+                       const char* current_state_name = state_names[(int)level_selector.current_transition_state];
+                       const char* transition_text = TextFormat("Transition: %s", current_state_name);
                        int text_width = MeasureText(transition_text, 24);
                        DrawText(transition_text, (GetScreenWidth() - text_width) / 2, 50, 24, WHITE);
 
-                       // Progress bar
-                       int bar_width = 300;
-                       int bar_height = 8;
-                       int bar_x = (GetScreenWidth() - bar_width) / 2;
-                       int bar_y = 80;
-
-                       DrawRectangle(bar_x, bar_y, bar_width, bar_height, DARKGRAY);
-                       DrawRectangle(bar_x, bar_y, (int)(bar_width * progress), bar_height, YELLOW);
-                       DrawRectangleLines(bar_x, bar_y, bar_width, bar_height, WHITE);
+                       // Show platform movement progress
+                       if (level_selector.current_transition_state == TransitionState::MOVING_OUT_OLD_PLATFORMS) {
+                           DrawText(TextFormat("Moving out platform: %d / %d", 
+                                              (int)level_selector.current_old_platform_index + 1, 
+                                              (int)level_selector.old_platforms_queue.size()), 
+                                    (GetScreenWidth() - 200) / 2, 80, 16, YELLOW);
+                       } else if (level_selector.current_transition_state == TransitionState::MOVING_IN_NEW_PLATFORMS) {
+                           DrawText(TextFormat("Moving in platform: %d / %d", 
+                                              (int)level_selector.current_new_platform_index + 1, 
+                                              (int)level_selector.new_platforms_queue.size()), 
+                                    (GetScreenWidth() - 200) / 2, 80, 16, GREEN);
+                       } else if (level_selector.current_transition_state == TransitionState::MOVING_BOX_AND_GORILLA) {
+                           float progress = level_selector.entity_move_timer / level_selector.ENTITY_MOVE_DURATION;
+                           DrawText(TextFormat("Moving box and gorilla: %.0f%%", progress * 100.0f), 
+                                    (GetScreenWidth() - 200) / 2, 80, 16, BLUE); // Changed from CYAN to LIGHTBLUE
+                       }
                    } else {
                        // Show initial loading message
                        float progress = 1.0f - (loading_timer / LOADING_DURATION);
