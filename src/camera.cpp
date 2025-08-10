@@ -14,7 +14,8 @@ SimCamera::SimCamera() {
 }
 
 void SimCamera::Update(float dt) {
-    // Camera update logic can go here if needed (smooth transitions, etc.)
+    // (Intentionally minimal; smoothing is handled in FindBounds so you don't
+    // have to change the rest of your codebase or pass dt through more places.)
 }
 
 void SimCamera::FindBounds(std::vector<Platform> platforms) {
@@ -62,8 +63,8 @@ void SimCamera::FindBounds(std::vector<Platform> platforms) {
     bottommost_y += padding;
     
     // Calculate the center of the bounding area
-    float center_x = (leftmost_x + rightmost_x) * 0.5f;
-    float center_y = (topmost_y + bottommost_y) * 0.5f;
+    float desired_center_x = (leftmost_x + rightmost_x) * 0.5f;
+    float desired_center_y = (topmost_y + bottommost_y) * 0.5f;
     
     // Calculate required dimensions
     float required_width = rightmost_x - leftmost_x;
@@ -78,13 +79,38 @@ void SimCamera::FindBounds(std::vector<Platform> platforms) {
     float zoom_y = screen_height / required_height;
     
     // Use the smaller zoom to ensure everything fits
-    float target_zoom = fminf(zoom_x, zoom_y);
+    float desired_zoom = fminf(zoom_x, zoom_y);
     
     // Clamp zoom to reasonable limits
-    target_zoom = fmaxf(0.1f, fminf(target_zoom, 3.0f));
+    desired_zoom = fmaxf(0.1f, fminf(desired_zoom, 3.0f));
     
-    // Set camera properties
-    camera.target = { center_x, center_y };
+    // Keep camera offset centered on the screen
     camera.offset = { screen_width * 0.5f, screen_height * 0.5f };
-    camera.zoom = target_zoom;    
+
+    // --- Smoothly move/zoom toward the desired frame ---
+    // Use frame-time-based exponential smoothing so it feels consistent.
+    // Higher 'speed' values converge faster.
+    float dt = GetFrameTime();
+    float follow_speed = 6.0f; // position smoothing speed
+    float zoom_speed = 6.0f;   // zoom smoothing speed
+
+    // First-time init: snap immediately so we don't see a big jump on first frame
+    static bool initialized = false;
+    if (!initialized) {
+        camera.target = { desired_center_x, desired_center_y };
+        camera.zoom = desired_zoom;
+        initialized = true;
+        return;
+    }
+
+    // Convert the speed constants into a [0..1] interpolation factor per frame
+    float a_pos = 1.0f - expf(-follow_speed * dt);
+    float a_zoom = 1.0f - expf(-zoom_speed * dt);
+
+    // Lerp target
+    camera.target.x += (desired_center_x - camera.target.x) * a_pos;
+    camera.target.y += (desired_center_y - camera.target.y) * a_pos;
+
+    // Lerp zoom
+    camera.zoom += (desired_zoom - camera.zoom) * a_zoom;
 }

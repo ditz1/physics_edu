@@ -67,9 +67,9 @@ public:
     float old_platform_delay_timer = 0.0f;
     float new_platform_delay_timer = 0.0f;
     
-    const float ENTITY_MOVE_DURATION = 0.6f;
-    const float PLATFORM_MOVE_DURATION = 0.4f; // Time for each platform to move
-    const float PLATFORM_DELAY = 0.1f; // Delay between platform movements
+    const float ENTITY_MOVE_DURATION = 0.3f;
+    const float PLATFORM_MOVE_DURATION = 0.3f; // Time for each platform to move
+    const float PLATFORM_DELAY = 0.05f; // Delay between platform movements
     
     void Draw();
     void Update();
