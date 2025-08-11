@@ -57,126 +57,186 @@ void DrawDebugInfo2(Spring spring, Spring spring2){
    DrawText(TextFormat("%.2f = 2pi * sqrt(%.2f / %.2f)", T, L, g), x_start - 20, y_start + 80, 18, RAYWHITE);
 }
 
-void LoadPlatformConfigurationFromFile(const char* filename, std::vector<Platform>& platforms) {
-   std::ifstream file(filename);
-   
-   if (!file.is_open()) {
-       std::cerr << "Failed to open " << filename << std::endl;
-       return;
-   }
-   
-   platforms.clear();
-   
-   std::string line;
-   int platform_count = 0;
-   while (std::getline(file, line)) {
-       if (line.empty()) continue;
-       
-       char type;
-       float center_x, center_y, width, height, rotation;
-       
-       if (sscanf(line.c_str(), "%c, %f, %f, %f, %f, %f", 
-                  &type, &center_x, &center_y, &width, &height, &rotation) == 6) {
-           if (type == 'R') {
-               Vector2 pos = { center_x, center_y };
-               Vector2 size = { width, height };
-               
-               Platform new_platform(pos, size, rotation);
-               platforms.push_back(new_platform);
-               platform_count++;
-               std::cout << "Loaded platform " << platform_count << ": pos(" << pos.x << "," << pos.y 
-                        << ") size(" << size.x << "," << size.y << ") rot(" << rotation << ")" << std::endl;
-           }
-       } else {
-           std::cout << "Failed to parse line: " << line << std::endl;
-       }
-   }
-   
-   std::cout << "Platform configuration loaded from " << filename << " - " << platform_count << " platforms loaded" << std::endl;
-   file.close();
+// Replace your old signature:
+//   void LoadPlatformConfigurationFromFile(const char* filename, std::vector<Platform>& platforms)
+//
+// With this version that ALSO loads BOX and GORILLA positions, and assigns platform IDs.
+bool LoadPlatformConfigurationFromFile(const char* filename,
+    std::vector<Platform>& platforms,
+    Box& box,
+    Gorilla& gorilla) {
+    std::ifstream file(filename);
+    if (!file.is_open()) {
+        std::cerr << "Failed to open " << filename << std::endl;
+        return false;
+    }
+
+    platforms.clear();
+
+    std::string line;
+    int platform_count = 0;
+
+    bool box_position_loaded = false;
+    bool gorilla_position_loaded = false;
+
+    // Reasonable defaults match your other loaders
+    Vector2 default_box_position = { 75.0f, (float)GetScreenHeight() / 2.0f - 200.0f };
+    Vector2 default_gorilla_position = { (float)GetScreenWidth() - 150.0f, 480.0f };
+
+    while (std::getline(file, line)) {
+        if (line.empty()) continue;
+
+        // BOX, x, y
+        if (line.rfind("BOX", 0) == 0) {
+        float bx, by;
+        size_t first_comma = line.find(',');
+        if (first_comma != std::string::npos) {
+        std::string coords = line.substr(first_comma + 1);
+        if (sscanf(coords.c_str(), " %f, %f", &bx, &by) == 2) {
+        Vector2 box_pos = { bx, by };
+        box.position = box_pos;
+        box.origin_position = box_pos;
+        box_position_loaded = true;
+        }
+        }
+        }
+// GORILLA, x, y
+else if (line.rfind("GORILLA", 0) == 0) {
+float gx, gy;
+size_t first_comma = line.find(',');
+if (first_comma != std::string::npos) {
+std::string coords = line.substr(first_comma + 1);
+if (sscanf(coords.c_str(), " %f, %f", &gx, &gy) == 2) {
+gorilla.position = { gx, gy };
+gorilla_position_loaded = true;
+}
+}
+}
+// R, cx, cy, w, h, rot  (platform rows)
+else {
+char type;
+float cx, cy, w, h, rot;
+if (sscanf(line.c_str(), "%c, %f, %f, %f, %f, %f",
+&type, &cx, &cy, &w, &h, &rot) == 6) {
+if (type == 'R') {
+Vector2 pos  = { cx, cy };
+Vector2 size = { w, h };
+Platform p(pos, size, rot);
+p.id = platform_count;
+platforms.push_back(p);
+platform_count++;
+}
+}
+}
 }
 
+if (!box_position_loaded) {
+box.position = default_box_position;
+box.origin_position = default_box_position;
+}
+if (!gorilla_position_loaded) {
+gorilla.position = default_gorilla_position;
+}
+
+// Ensure platform IDs are consistent
+for (int i = 0; i < (int)platforms.size(); ++i) {
+platforms[i].id = i;
+}
+
+std::cout << "Platform configuration loaded from " << filename
+<< " - " << platform_count << " platforms loaded" << std::endl;
+
+file.close();
+return true;
+}
+
+
 int main(int argc, char* argv[]) {
-   const int screenWidth = 1280;
-   const int screenHeight = 720;
+    const int screenWidth = 1280;
+    const int screenHeight = 720;
 
-   SetConfigFlags(FLAG_MSAA_4X_HINT);
-   SetConfigFlags(FLAG_WINDOW_RESIZABLE);
-   InitWindow(screenWidth, screenHeight, "physics engine");
+    SetConfigFlags(FLAG_MSAA_4X_HINT);
+    SetConfigFlags(FLAG_WINDOW_RESIZABLE);
+    InitWindow(screenWidth, screenHeight, "physics engine");
 
-   Texture2D gorilla_tex = LoadTexture("../assets/gorilla.png");
-   Texture2D bananas_tex = LoadTexture("../assets/bananas.png");
-   Texture2D log_tex = LoadTexture("../assets/log.png");
-   Texture2D log_end_tex = LoadTexture("../assets/log_end.png");  // NEW
-   Texture2D log_slice_tex = LoadTexture("../assets/log_slice.png");  // NEW
+    Texture2D gorilla_tex = LoadTexture("../assets/gorilla.png");
+    Texture2D bananas_tex = LoadTexture("../assets/bananas.png");
+    Texture2D log_tex = LoadTexture("../assets/log.png");
+    Texture2D log_end_tex = LoadTexture("../assets/log_end.png");
+    Texture2D log_slice_tex = LoadTexture("../assets/log_slice.png");
 
-   float dt_modifier = 1.0f;
+    float dt_modifier = 1.0f;
+    SetTargetFPS(60);
 
-   SetTargetFPS(60);
+    // Initialize level selector and camera
+    LevelSelector level_selector;
+    SimCamera camera;
 
-   // Initialize level selector
-   LevelSelector level_selector;
-   SimCamera camera;
+    // Transition camera store
+    static Camera2D stored_camera;
+    static bool camera_stored = false;
 
-   // Static camera storage for transitions
-   static Camera2D stored_camera;
-   static bool camera_stored = false;
+    // Level switching variables
+    bool collision_with_gorilla = false;
+    float level_switch_timer = 0.0f;
+    const float LEVEL_SWITCH_DELAY = 3.0f;
+    bool showing_success = false;
+    bool loading_next_level = false;
+    float loading_timer = 0.0f;
+    const float LOADING_DURATION = 1.0f;
 
-   // Level switching variables
-   bool collision_with_gorilla = false;
-   float level_switch_timer = 0.0f;
-   const float LEVEL_SWITCH_DELAY = 3.0f; // 3 seconds to show success message
-   bool showing_success = false;
-   bool loading_next_level = false;
-   float loading_timer = 0.0f;
-   const float LOADING_DURATION = 1.0f; // 1 second loading screen
+    // --- NEW: capture an optional startup config path, but DO NOT load yet ---
+    const char* startup_config_path = nullptr;
+    for (int i = 1; i < argc; i++) {
+        if (strcmp(argv[i], "-f") == 0 && i + 1 < argc) {
+            startup_config_path = argv[i + 1];
+            break;
+        }
+    }
 
-   bool config_loaded = false;
-   for (int i = 1; i < argc; i++) {
-       if (strcmp(argv[i], "-f") == 0 && i + 1 < argc) {
-           // Load configuration from specified file
-           LoadPlatformConfigurationFromFile(argv[i + 1], all_platforms);
-           for (int i = 0; i < all_platforms.size(); i++) {
-               all_platforms[i].id = i;
-           }
-           config_loaded = true;
-           std::cout << "Loaded platform configuration from: " << argv[i + 1] << std::endl;
-           break;
-       }
-   }
+    float dt = 1.0f / 30.0f;
 
-   // Only add default platforms if no config was loaded
-   if (!config_loaded) {
-       std::cout << "Using default platform configuration" << std::endl;
-       Vector2 plat_start = { screenWidth/2.0f, screenHeight };
-       Vector2 plat_size = { screenWidth, 320.0f };
-       Platform platform = {plat_start, plat_size};
+    // Create objects BEFORE loading, so we can assign positions from file
+    Box box = Box(50, 50);
+    box.position = { 75.0f, screenHeight / 2.0f - 200.0f };
+    box.mass = 100.0f;
+    box.texture = &bananas_tex;
+    box.ghost_calculated = false;
 
-       Vector2 plat_center_2 = { 375.0f, screenHeight - 50.0f };
-       Vector2 plat_size_2 = { 1050.0f, 325.0f };
-       float plat_rotation = 40.0f;
-       Platform platform2 = {plat_center_2, plat_size_2, plat_rotation};
-       
-       all_platforms.push_back(platform);
-       all_platforms.push_back(platform2);
-       
-       // Assign IDs to default platforms
-       for (int i = 0; i < all_platforms.size(); i++) {
-           all_platforms[i].id = i;
-       }
-   }
+    Gorilla gorilla({screenWidth - 150.0f, 480.0f});
+    gorilla.texture = &gorilla_tex;
 
-   float dt = 1.0f / 30.0f; // Fixed time step for 60 FPS
+    // Now we can load config if provided so gorilla/box positions are applied
+    bool config_loaded = false;
+    if (startup_config_path) {
+        config_loaded = LoadPlatformConfigurationFromFile(startup_config_path, all_platforms, box, gorilla);
+        if (config_loaded) {
+            for (int i = 0; i < (int)all_platforms.size(); i++) all_platforms[i].id = i;
+            std::cout << "Loaded platform configuration from: " << startup_config_path << std::endl;
+        }
+    }
 
-   Box box = Box(50, 50);
-   box.position = { 75.0f, screenHeight / 2.0f - 200.0f };
-   box.mass = 100.0f;
-   box.texture = &bananas_tex;
-   box.ghost_calculated = false;
+    // If nothing was loaded, fall back to your default platforms (unchanged)
+    if (!config_loaded) {
+        std::cout << "Using default platform configuration" << std::endl;
+        Vector2 plat_start = { screenWidth/2.0f, screenHeight };
+        Vector2 plat_size = { screenWidth, 320.0f };
+        Platform platform = {plat_start, plat_size};
 
-   // Initialize Gorilla
-   Gorilla gorilla({screenWidth - 150.0f, 480.0f});
-   gorilla.texture = &gorilla_tex;
+        Vector2 plat_center_2 = { 375.0f, screenHeight - 50.0f };
+        Vector2 plat_size_2 = { 1050.0f, 325.0f };
+        float plat_rotation = 40.0f;
+        Platform platform2 = {plat_center_2, plat_size_2, plat_rotation};
+
+        all_platforms.push_back(platform);
+        all_platforms.push_back(platform2);
+
+        for (int i = 0; i < (int)all_platforms.size(); i++) {
+            all_platforms[i].id = i;
+        }
+    }
+
+
 
    Toolbox toolbox;
    bool toolbox_active = true;
