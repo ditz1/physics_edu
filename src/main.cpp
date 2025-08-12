@@ -88,30 +88,30 @@ bool LoadPlatformConfigurationFromFile(const char* filename,
 
         // BOX, x, y
         if (line.rfind("BOX", 0) == 0) {
-        float bx, by;
-        size_t first_comma = line.find(',');
-        if (first_comma != std::string::npos) {
-        std::string coords = line.substr(first_comma + 1);
-        if (sscanf(coords.c_str(), " %f, %f", &bx, &by) == 2) {
-        Vector2 box_pos = { bx, by };
-        box.position = box_pos;
-        box.origin_position = box_pos;
-        box_position_loaded = true;
-        }
+            float bx, by;
+            size_t first_comma = line.find(',');
+            if (first_comma != std::string::npos) {
+                std::string coords = line.substr(first_comma + 1);
+                    if (sscanf(coords.c_str(), " %f, %f", &bx, &by) == 2) {
+                        Vector2 box_pos = { bx, by };
+                        box.position = box_pos;
+                        box.origin_position = box_pos;
+                        box_position_loaded = true;
+            }
         }
         }
 // GORILLA, x, y
-else if (line.rfind("GORILLA", 0) == 0) {
-float gx, gy;
-size_t first_comma = line.find(',');
-if (first_comma != std::string::npos) {
-std::string coords = line.substr(first_comma + 1);
-if (sscanf(coords.c_str(), " %f, %f", &gx, &gy) == 2) {
-gorilla.position = { gx, gy };
-gorilla_position_loaded = true;
-}
-}
-}
+        else if (line.rfind("GORILLA", 0) == 0) {
+        float gx, gy;
+        size_t first_comma = line.find(',');
+            if (first_comma != std::string::npos) {
+        std::string coords = line.substr(first_comma + 1);
+        if (sscanf(coords.c_str(), " %f, %f", &gx, &gy) == 2) {
+        gorilla.position = { gx, gy };
+        gorilla_position_loaded = true;
+        }
+        }
+        }
 // R, cx, cy, w, h, rot  (platform rows)
 else {
 char type;
@@ -164,6 +164,9 @@ int main(int argc, char* argv[]) {
     Texture2D log_tex = LoadTexture("../assets/log.png");
     Texture2D log_end_tex = LoadTexture("../assets/log_end.png");
     Texture2D log_slice_tex = LoadTexture("../assets/log_slice.png");
+    Texture2D background_tex = LoadTexture("../assets/tropical_bg.png");
+    
+    Color background_color = {0, 0, 0, 100};
 
     float dt_modifier = 1.0f;
     SetTargetFPS(60);
@@ -239,7 +242,7 @@ int main(int argc, char* argv[]) {
 
 
    Toolbox toolbox;
-   bool toolbox_active = true;
+   bool toolbox_active = false;
    float box_force = 50.0f;
 
    while (!WindowShouldClose()) {
@@ -515,6 +518,9 @@ int main(int argc, char* argv[]) {
 
        BeginDrawing();
            ClearBackground(DARKGRAY);
+           DrawTexturePro(background_tex, {0, 0, (float)background_tex.width, (float)background_tex.height},
+                            {0, 0, (float)screenWidth, (float)screenHeight}, {0, 0}, 0, WHITE);
+            DrawRectangle(0, 0, screenWidth, screenHeight, background_color);    
 
            // Always show the game view (no more black loading screen)
            if (!level_selector.is_active) {
@@ -696,6 +702,7 @@ int main(int argc, char* argv[]) {
    UnloadTexture(log_tex);
    UnloadTexture(log_end_tex);  
    UnloadTexture(log_slice_tex);
+   UnloadTexture(background_tex);
    
    CloseWindow();
 
