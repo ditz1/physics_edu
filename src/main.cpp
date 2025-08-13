@@ -112,52 +112,98 @@ bool LoadPlatformConfigurationFromFile(const char* filename,
         }
         }
         }
-// R, cx, cy, w, h, rot  (platform rows)
-else {
-char type;
-float cx, cy, w, h, rot;
-if (sscanf(line.c_str(), "%c, %f, %f, %f, %f, %f",
-&type, &cx, &cy, &w, &h, &rot) == 6) {
-if (type == 'R') {
-Vector2 pos  = { cx, cy };
-Vector2 size = { w, h };
-Platform p(pos, size, rot);
-p.id = platform_count;
-platforms.push_back(p);
-platform_count++;
-}
-}
-}
-}
+        // R, cx, cy, w, h, rot  (platform rows)
+        else {
+        char type;
+        float cx, cy, w, h, rot;
+        if (sscanf(line.c_str(), "%c, %f, %f, %f, %f, %f",
+        &type, &cx, &cy, &w, &h, &rot) == 6) {
+        if (type == 'R') {
+        Vector2 pos  = { cx, cy };
+        Vector2 size = { w, h };
+        Platform p(pos, size, rot);
+        p.id = platform_count;
+        platforms.push_back(p);
+        platform_count++;
+        }
+        }
+        }
+        }
 
-if (!box_position_loaded) {
-box.position = default_box_position;
-box.origin_position = default_box_position;
-}
-if (!gorilla_position_loaded) {
-gorilla.position = default_gorilla_position;
-}
+        if (!box_position_loaded) {
+        box.position = default_box_position;
+        box.origin_position = default_box_position;
+        }
+        if (!gorilla_position_loaded) {
+        gorilla.position = default_gorilla_position;
+        }
 
-// Ensure platform IDs are consistent
-for (int i = 0; i < (int)platforms.size(); ++i) {
-platforms[i].id = i;
-}
+        // Ensure platform IDs are consistent
+        for (int i = 0; i < (int)platforms.size(); ++i) {
+        platforms[i].id = i;
+        }
 
-std::cout << "Platform configuration loaded from " << filename
-<< " - " << platform_count << " platforms loaded" << std::endl;
+        std::cout << "Platform configuration loaded from " << filename
+        << " - " << platform_count << " platforms loaded" << std::endl;
 
-file.close();
-return true;
-}
+        file.close();
+        return true;
+        }
 
 
 int main(int argc, char* argv[]) {
-    const int screenWidth = 1280;
-    const int screenHeight = 720;
+    int screenWidth = 1280;
+    int screenHeight = 720;
 
     SetConfigFlags(FLAG_MSAA_4X_HINT);
     SetConfigFlags(FLAG_WINDOW_RESIZABLE);
     InitWindow(screenWidth, screenHeight, "physics engine");
+
+    // Initialize level selector and camera
+    LevelSelector level_selector;
+    SimCamera camera;
+
+    // --- Audio setup ---
+    InitAudioDevice();
+
+    // Load tracks for tiers (looping)
+    Music musicTier1 = LoadMusicStream("../assets/steeldrum.mp3");
+    Music musicTier2 = LoadMusicStream("../assets/carribean.mp3");
+    musicTier1.looping = true;
+    musicTier2.looping = true;
+
+    // Optional: volume
+    SetMusicVolume(musicTier1, 0.8f);
+    SetMusicVolume(musicTier2, 0.8f);
+
+    // Current tier comes straight from the level selector: 1-1, 1-2, 1-3 => 1; 2-1.. => 2
+    auto CurrentTier = [&]()->int {
+        return level_selector.selected_level; // first number before the dash
+    };
+
+    Music* currentMusic = nullptr;
+    int activeTier = 0;
+
+    auto SwitchToTier = [&](int tier) {
+        Music* next = nullptr;
+        if (tier == 1) next = &musicTier1;
+        else if (tier == 2) next = &musicTier2;
+        else {
+            // no track defined for this tier — do nothing
+            return;
+        }
+
+        if (currentMusic && IsMusicStreamPlaying(*currentMusic)) {
+            StopMusicStream(*currentMusic);
+        }
+        currentMusic = next;
+        PlayMusicStream(*currentMusic);
+        activeTier = tier;
+    };
+
+    // Kick off the initial track for the currently selected level
+    SwitchToTier(CurrentTier());
+
 
     Texture2D gorilla_tex = LoadTexture("../assets/gorilla.png");
     Texture2D bananas_tex = LoadTexture("../assets/bananas.png");
@@ -171,9 +217,9 @@ int main(int argc, char* argv[]) {
     float dt_modifier = 1.0f;
     SetTargetFPS(60);
 
-    // Initialize level selector and camera
-    LevelSelector level_selector;
-    SimCamera camera;
+    int debug_font_size = 16;
+
+    
 
     // Transition camera store
     static Camera2D stored_camera;
@@ -212,7 +258,7 @@ int main(int argc, char* argv[]) {
     // Now we can load config if provided so gorilla/box positions are applied
     bool config_loaded = false;
     if (startup_config_path) {
-        config_loaded = LoadPlatformConfigurationFromFile(startup_config_path, all_platforms, box, gorilla);
+        config_loaded = LoadPlatformConfigurationFromFile(startup_config_path, all_platforms, box, gorilla);clear
         if (config_loaded) {
             for (int i = 0; i < (int)all_platforms.size(); i++) all_platforms[i].id = i;
             std::cout << "Loaded platform configuration from: " << startup_config_path << std::endl;
@@ -222,8 +268,8 @@ int main(int argc, char* argv[]) {
     // If nothing was loaded, fall back to your default platforms (unchanged)
     if (!config_loaded) {
         std::cout << "Using default platform configuration" << std::endl;
-        Vector2 plat_start = { screenWidth/2.0f, screenHeight };
-        Vector2 plat_size = { screenWidth, 320.0f };
+        Vector2 plat_start = { static_cast<float>(screenWidth/2.0f), static_cast<float>(screenHeight) };
+        Vector2 plat_size = { static_cast<float>(screenWidth), 320.0f };
         Platform platform = {plat_start, plat_size};
 
         Vector2 plat_center_2 = { 375.0f, screenHeight - 50.0f };
@@ -246,7 +292,12 @@ int main(int argc, char* argv[]) {
    float box_force = 50.0f;
 
    while (!WindowShouldClose()) {
+        screenWidth = GetScreenWidth();
+        screenHeight = GetScreenHeight();
        dt = 1.0f / (30.0f * dt_modifier);
+
+        if (currentMusic) UpdateMusicStream(*currentMusic);
+
 
        // Handle level selector
        if (IsKeyPressed(KEY_M)) {
@@ -291,7 +342,8 @@ int main(int argc, char* argv[]) {
                    loading_next_level = false;
                    level_switch_timer = 0.0f;
                    loading_timer = 0.0f;
-                   
+                   SwitchToTier(CurrentTier());
+
                    std::cout << "Level loaded successfully!" << std::endl;
                }
            }
@@ -521,6 +573,14 @@ int main(int argc, char* argv[]) {
            }
        }
 
+       if (!level_selector.is_active) {
+            int desiredTier = CurrentTier();
+            if (desiredTier != activeTier) {
+                SwitchToTier(desiredTier);
+            }
+        }
+    
+
        BeginDrawing();
            ClearBackground(DARKGRAY);
            DrawTexturePro(background_tex, {0, 0, (float)background_tex.width, (float)background_tex.height},
@@ -658,13 +718,13 @@ int main(int argc, char* argv[]) {
                }
            
                if (!loading_next_level && !level_selector.is_transitioning) {
-                   DrawText("get the box to the green square!", 400, 200, 20, RAYWHITE);
+                   //DrawText("get the box to the green square!", 400, 200, 20, RAYWHITE);
                
                    // Debug ghost calculation status
                    if (box.has_prediction_start) {
-                       DrawText(TextFormat("Multi-platform ghost: %s", box.multi_platform_ghost_calculated ? "YES" : "NO"), 10, 100, 20, RAYWHITE);
-                       DrawText(TextFormat("Is colliding: %s", box.is_colliding ? "YES" : "NO"), 10, 130, 20, RAYWHITE);
-                       DrawText(TextFormat("Trajectory segments: %d", (int)box.trajectory_segments.size()), 10, 160, 20, RAYWHITE);
+                       DrawText(TextFormat("Multi-platform ghost: %s", box.multi_platform_ghost_calculated ? "YES" : "NO"), 10, 100, debug_font_size, RAYWHITE);
+                       DrawText(TextFormat("Is colliding: %s", box.is_colliding ? "YES" : "NO"), 10, 130, debug_font_size, RAYWHITE);
+                       DrawText(TextFormat("Trajectory segments: %d", (int)box.trajectory_segments.size()), 10, 160, debug_font_size, RAYWHITE);
                    }
 
                    // Show reference frame info
@@ -673,20 +733,20 @@ int main(int argc, char* argv[]) {
                        for (size_t i = 0; i < box.trajectory_segments.size(); i += 2) {
                            reference_frame_count++;
                        }
-                       DrawText(TextFormat("Reference frames: %d", reference_frame_count), 10, 190, 20, RAYWHITE);
+                       DrawText(TextFormat("Reference frames: %d", reference_frame_count), 10, 190, debug_font_size, RAYWHITE);
                    }
                
-                   DrawText(TextFormat("Force: %.2f", box_force), 10, 10, 20, RAYWHITE);
-                   DrawText(TextFormat("Box Velocity: (%.2f, %.2f)", box.velocity.x, box.velocity.y), 10, 40, 20, RAYWHITE);
-                   DrawText(TextFormat("Box Friction (mu_f): %.2f", box.mu_kinetic), 10, 70, 20, RAYWHITE);
+                   DrawText(TextFormat("Force: %.2f", box_force), 10, 10, debug_font_size, RAYWHITE);
+                   DrawText(TextFormat("Box Velocity: (%.2f, %.2f)", box.velocity.x, box.velocity.y), 10, 40, debug_font_size, RAYWHITE);
+                   DrawText(TextFormat("Box Friction (mu_f): %.2f", box.mu_kinetic), 10, 70, debug_font_size, RAYWHITE);
                    DrawFPS(10, 10);
                
                    if (edit_mode) {
-                       DrawText("EDIT MODE", screenWidth - 140, screenHeight - 40, 20, RED);
+                       DrawText("EDIT MODE", screenWidth - 140, screenHeight - 40, debug_font_size, RED);
                        DrawText("Grab platform + D = Delete", screenWidth - 200, screenHeight - 70, 16, YELLOW);
                    }
 
-                   DrawText(TextFormat("Num Platforms: %d", all_platforms.size()), 50, 10, 20, RAYWHITE);
+                   DrawText(TextFormat("Num Platforms: %d", all_platforms.size()), 50, 10, debug_font_size, RAYWHITE);
                    if (toolbox.creating_platform) {
                        DrawText("Creating Platform", 50, 40, 20, RAYWHITE);
                    }
@@ -708,6 +768,12 @@ int main(int argc, char* argv[]) {
    UnloadTexture(log_end_tex);  
    UnloadTexture(log_slice_tex);
    UnloadTexture(background_tex);
+
+   if (currentMusic && IsMusicStreamPlaying(*currentMusic)) StopMusicStream(*currentMusic);
+    UnloadMusicStream(musicTier1);
+    UnloadMusicStream(musicTier2);
+    CloseAudioDevice();
+
    
    CloseWindow();
 

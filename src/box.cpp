@@ -158,29 +158,69 @@ void Box::Update(float dt, const std::vector<Platform>& platforms) {
 }
 
 void Box::Draw() {
-    float border = 2.0f;
-    
+    const float border = 0.2f;
+
+    // --- Outer border (rotates around center) ---
     DrawRectanglePro(
-        (Rectangle){ position.x, position.y, size.x, size.y }, 
-        (Vector2){ size.x * 0.5f, size.y * 0.5f }, // origin at center
-        rotation, 
+        (Rectangle){ position.x, position.y, size.x, size.y },
+        (Vector2){ size.x * 0.5f, size.y * 0.5f },
+        rotation,
         BLACK
     );
-    
+
+    // --- Inner fill under the texture (optional but looks nicer if texture has alpha) ---
     DrawRectanglePro(
-        (Rectangle){ position.x, position.y, size.x - border * 2, size.y - border * 2 }, 
-        (Vector2){ (size.x - border * 2) * 0.5f, (size.y - border * 2) * 0.5f }, // origin at center of smaller rect
-        rotation, 
+        (Rectangle){ position.x, position.y, size.x - border * 2.0f, size.y - border * 2.0f },
+        (Vector2){ (size.x - border * 2.0f) * 0.5f, (size.y - border * 2.0f) * 0.5f },
+        rotation,
         color
     );
 
-    // broken because need to account for rotation
-    //DrawTextureEx(*texture, { position.x - size.x, position.y - size.y }, rotation, 0.08f, WHITE);
-    //DrawTexturePro(*texture, {0, 0, (float)texture->width, (float)texture->height}, {position.x - size.x * 0.5f, position.y - size.y * 0.5f, size.x * 1.5f, size.y * 1.5f}, {size.x * 0.5f, size.y * 0.5f}, rotation, WHITE);
-    
-    
-    DrawCircleV(position, 5, WHITE);
+    // --- Texture: preserve aspect, upscale, keep bottom aligned with cube ---
+    if (texture && texture->width > 0 && texture->height > 0) {
+        // Base target height = inner box height; scale more if you want it bigger
+        const float innerH      = size.y + (size.y * 0.2f);
+        const float heightScale = 1.5f;          // <== make it bigger/smaller here
+        const float desiredH    = innerH * heightScale;
+
+        // Keep aspect ratio: scale by height
+        const float scale = desiredH / (float)texture->height;
+        const float dstW  = (float)texture->width  * scale;
+        const float dstH  = (float)texture->height * scale; // == desiredH
+
+        // Compute cube bottom-center in world space (so bottom stays lined up when rotating)
+        const float rad  = rotation * DEG2RAD;
+        const float cs   = cosf(rad), sn = sinf(rad);
+
+        // Align to OUTER bottom of the cube. If you prefer inner bottom, use: (size.y*0.5f - border)
+        const float bottomOffsetY = size.y * 0.8f;
+
+        Vector2 bottomCenter = {
+            position.x + (0.0f * cs - bottomOffsetY * sn),
+            position.y + (0.0f * sn + bottomOffsetY * cs)
+        };
+
+        // Draw with pivot at texture bottom-center
+        Rectangle src = { 0.0f, 0.0f, (float)texture->width, (float)texture->height };
+        Rectangle dst = { bottomCenter.x, bottomCenter.y, dstW, dstH };
+        Vector2   origin = { dstW * 0.5f, dstH }; // bottom-center pivot
+
+        DrawTexturePro(*texture, src, dst, origin, rotation, WHITE);
+    }
+
+    // Optional outline
+    Rectangle outline = {
+        position.x - size.x * 0.5f,
+        position.y - size.y * 0.5f,
+        size.x, size.y
+    };
+    DrawRectangleLinesEx(outline, border, BLACK);
+
+    // Debug center marker
+    // DrawCircleV(position, 5, WHITE);
 }
+
+
 
 void Box::CheckCollision() {
     int s_width = GetScreenWidth();
