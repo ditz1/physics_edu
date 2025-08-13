@@ -157,7 +157,7 @@ int main(int argc, char* argv[]) {
 
     SetConfigFlags(FLAG_MSAA_4X_HINT);
     SetConfigFlags(FLAG_WINDOW_RESIZABLE);
-    InitWindow(screenWidth, screenHeight, "physics engine");
+    InitWindow(screenWidth, screenHeight, "Banana Slide");
 
     // Initialize level selector and camera
     LevelSelector level_selector;
@@ -169,12 +169,15 @@ int main(int argc, char* argv[]) {
     // Load tracks for tiers (looping)
     Music musicTier1 = LoadMusicStream("../assets/steeldrum.mp3");
     Music musicTier2 = LoadMusicStream("../assets/carribean.mp3");
+    Music musicTier3 = LoadMusicStream("../assets/jungle.mp3");
     musicTier1.looping = true;
     musicTier2.looping = true;
+    musicTier3.looping = true;
 
     // Optional: volume
     SetMusicVolume(musicTier1, 0.8f);
-    SetMusicVolume(musicTier2, 0.6f);
+    SetMusicVolume(musicTier2, 0.3f);
+    SetMusicVolume(musicTier3, 0.6f);
 
     // Current tier comes straight from the level selector: 1-1, 1-2, 1-3 => 1; 2-1.. => 2
     auto CurrentTier = [&]()->int {
@@ -184,10 +187,20 @@ int main(int argc, char* argv[]) {
     Music* currentMusic = nullptr;
     int activeTier = 0;
 
+    Texture2D gorilla_tex = LoadTexture("../assets/gorilla.png");
+    Texture2D bananas_tex = LoadTexture("../assets/bananas.png");
+    Texture2D log_tex = LoadTexture("../assets/log.png");
+    Texture2D log_end_tex = LoadTexture("../assets/log_end.png");
+    Texture2D log_slice_tex = LoadTexture("../assets/log_slice.png");
+    Texture2D background_tex = LoadTexture("../assets/tropical_bg.png");
+    Texture2D background_tex_2 = LoadTexture("../assets/sunset_bg.png");
+    Texture2D background_tex_3 = LoadTexture("../assets/night_bg.png");
+
     auto SwitchToTier = [&](int tier) {
         Music* next = nullptr;
         if (tier == 1) next = &musicTier1;
         else if (tier == 2) next = &musicTier2;
+        else if (tier == 3) next = &musicTier3;
         else {
             // no track defined for this tier — do nothing
             return;
@@ -201,16 +214,23 @@ int main(int argc, char* argv[]) {
         activeTier = tier;
     };
 
+    Texture2D* currentBackground = nullptr;
+
+    auto SwitchBackground = [&](int tier) {
+        Texture2D* next = nullptr;
+        if (tier == 1) next = &background_tex;
+        else if (tier == 2) next = &background_tex_2;
+        else if (tier == 3) next = &background_tex_3;
+
+        if (next) currentBackground = next;   // <— assign!
+    };
+
+
     // Kick off the initial track for the currently selected level
+    SwitchBackground(CurrentTier());
     SwitchToTier(CurrentTier());
 
 
-    Texture2D gorilla_tex = LoadTexture("../assets/gorilla.png");
-    Texture2D bananas_tex = LoadTexture("../assets/bananas.png");
-    Texture2D log_tex = LoadTexture("../assets/log.png");
-    Texture2D log_end_tex = LoadTexture("../assets/log_end.png");
-    Texture2D log_slice_tex = LoadTexture("../assets/log_slice.png");
-    Texture2D background_tex = LoadTexture("../assets/tropical_bg.png");
     
     Color background_color = {0, 0, 0, 100};
 
@@ -342,6 +362,7 @@ int main(int argc, char* argv[]) {
                    loading_next_level = false;
                    level_switch_timer = 0.0f;
                    loading_timer = 0.0f;
+                   SwitchBackground(CurrentTier());
                    SwitchToTier(CurrentTier());
 
                    std::cout << "Level loaded successfully!" << std::endl;
@@ -576,6 +597,7 @@ int main(int argc, char* argv[]) {
        if (!level_selector.is_active) {
             int desiredTier = CurrentTier();
             if (desiredTier != activeTier) {
+                SwitchBackground(desiredTier);
                 SwitchToTier(desiredTier);
             }
         }
@@ -583,8 +605,11 @@ int main(int argc, char* argv[]) {
 
        BeginDrawing();
            ClearBackground(DARKGRAY);
-           DrawTexturePro(background_tex, {0, 0, (float)background_tex.width, (float)background_tex.height},
-                            {0, 0, (float)screenWidth, (float)screenHeight}, {0, 0}, 0, WHITE);
+           if (currentBackground) {
+            Rectangle src = {0, 0, (float)currentBackground->width, (float)currentBackground->height};
+            Rectangle dst = {0, 0, (float)screenWidth, (float)screenHeight};
+            DrawTexturePro(*currentBackground, src, dst, {0,0}, 0, WHITE);
+        }
             DrawRectangle(0, 0, screenWidth, screenHeight, background_color);    
 
            // Always show the game view (no more black loading screen)
@@ -768,10 +793,13 @@ int main(int argc, char* argv[]) {
    UnloadTexture(log_end_tex);  
    UnloadTexture(log_slice_tex);
    UnloadTexture(background_tex);
+   UnloadTexture(background_tex_2);
+   UnloadTexture(background_tex_3);
 
    if (currentMusic && IsMusicStreamPlaying(*currentMusic)) StopMusicStream(*currentMusic);
     UnloadMusicStream(musicTier1);
     UnloadMusicStream(musicTier2);
+    UnloadMusicStream(musicTier3);
     CloseAudioDevice();
 
    
