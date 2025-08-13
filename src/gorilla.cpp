@@ -27,7 +27,7 @@ void Gorilla::Update(float dt) {
 
 void Gorilla::Draw() {
     // Draw collision zone outline (always visible for goal indication)
-    DrawRectangleLinesEx(collision_zone, 1.0f, GREEN);
+    //DrawRectangleLinesEx(collision_zone, 1.0f, GREEN);
     
     // Draw the gorilla texture
     if (texture) {

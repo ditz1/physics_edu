@@ -174,7 +174,7 @@ int main(int argc, char* argv[]) {
 
     // Optional: volume
     SetMusicVolume(musicTier1, 0.8f);
-    SetMusicVolume(musicTier2, 0.8f);
+    SetMusicVolume(musicTier2, 0.6f);
 
     // Current tier comes straight from the level selector: 1-1, 1-2, 1-3 => 1; 2-1.. => 2
     auto CurrentTier = [&]()->int {
@@ -258,7 +258,7 @@ int main(int argc, char* argv[]) {
     // Now we can load config if provided so gorilla/box positions are applied
     bool config_loaded = false;
     if (startup_config_path) {
-        config_loaded = LoadPlatformConfigurationFromFile(startup_config_path, all_platforms, box, gorilla);clear
+        config_loaded = LoadPlatformConfigurationFromFile(startup_config_path, all_platforms, box, gorilla);
         if (config_loaded) {
             for (int i = 0; i < (int)all_platforms.size(); i++) all_platforms[i].id = i;
             std::cout << "Loaded platform configuration from: " << startup_config_path << std::endl;

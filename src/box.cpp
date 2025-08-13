@@ -1,10 +1,12 @@
-#include "../include/box.hpp"
 #include "../include/collision_utils.hpp"
+#include "../include/box.hpp"
 #include <iostream>
 #include <algorithm>
 #include <limits>
 #include <vector>
 #include <set>
+
+static int font_size_for_dist = 18;
 
 Box::Box() {
     size = {50.0f, 50.0f};
@@ -24,6 +26,26 @@ static inline Vector2 vecAdd(Vector2 a, Vector2 b) { return {a.x+b.x, a.y+b.y}; 
 static inline Vector2 vecScale(Vector2 v, float s) { return {v.x*s, v.y*s}; }
 static inline Vector2 vecNorm(Vector2 v) { float L=vecLength(v); return (L>1e-6f)?Vector2{v.x/L,v.y/L}:Vector2{0,0}; }
 static inline Vector2 vecPerp(Vector2 v) { return {-v.y, v.x}; }
+
+// Vertical height difference (dimension) helper
+static void DrawVerticalDelta(float x, float yA, float yB) {
+    float yMin = fminf(yA, yB);
+    float yMax = fmaxf(yA, yB);
+    float dh   = fabsf(yB - yA);
+
+    // Vertical line
+    DrawLineEx({x, yMin}, {x, yMax}, 4.0f, LIME);
+
+    // Small end caps
+    float cap = 6.0f;
+    DrawLineEx({x - cap, yMin}, {x + cap, yMin}, 4.0f, LIME);
+    DrawLineEx({x - cap, yMax}, {x + cap, yMax}, 4.0f, LIME);
+
+    // Label
+    Vector2 labelPos = { x + 8.0f, (yMin + yMax) * 0.5f - 8.0f };
+    DrawTextBg(TextFormat("%.1f", dh), labelPos, font_size_for_dist, BLACK, (Color){200,255,200,220});
+}
+
 
 
 // === Analytic arc length for projectile: x(t)=v0x t, y(t)=v0y t + 0.5 g t^2 ===
@@ -67,13 +89,7 @@ static float ArcLenProjectile(Vector2 v0, float g, float T) {
 }
 
 
-// Compact text with a soft background for readability
-static void DrawTextBg(const char* txt, Vector2 pos, int fontSize, Color fg, Color bg) {
-    int w = MeasureText(txt, fontSize);
-    int h = fontSize + 4;
-    DrawRectangle((int)(pos.x - 4), (int)(pos.y - 2), w + 8, h, bg);
-    DrawText(txt, (int)pos.x, (int)pos.y, fontSize, fg);
-}
+
 
 // Label a segment with its length, offset a bit off the segment
 static void DrawSegmentLengthLabel(Vector2 A, Vector2 B, float overrideLen = -1.0f) {
@@ -81,7 +97,7 @@ static void DrawSegmentLengthLabel(Vector2 A, Vector2 B, float overrideLen = -1.
     Vector2 mid = { (A.x + B.x)*0.5f, (A.y + B.y)*0.5f };
     Vector2 n = vecPerp(vecNorm(vecSub(B, A)));   // normal
     Vector2 labelPos = vecAdd(mid, vecScale(n, -14.0f)); // slight offset above
-    DrawTextBg(TextFormat("%.1f", d), labelPos, 14, BLACK, (Color){255,255,255,180});
+    DrawTextBg(TextFormat("%.1f", d), labelPos, font_size_for_dist, BLACK, (Color){255,255,255,180});
 }
 
 // Draw horizontal & vertical gap dimensions between launch and land points
@@ -113,8 +129,8 @@ static void DrawGapDimensions(Vector2 launch, Vector2 land) {
     Vector2 hxLabelPos = { (H0.x + H1.x)*0.5f, H0.y - 16.0f };
     Vector2 vyLabelPos = { V1.x + 6.0f, (V0.y + V1.y)*0.5f - 7.0f };
 
-    DrawTextBg(TextFormat("W=%.1f", dx), hxLabelPos, 14, BLACK, (Color){200,230,255,220});
-    DrawTextBg(TextFormat("H=%.1f", dy), vyLabelPos, 14, BLACK, (Color){200,255,200,220});
+    DrawTextBg(TextFormat("%.1f", dx), hxLabelPos, font_size_for_dist, BLACK, (Color){200,230,255,220});
+    DrawTextBg(TextFormat("%.1f", dy), vyLabelPos, font_size_for_dist, BLACK, (Color){200,255,200,220});
 }
 
 
@@ -740,88 +756,19 @@ void Box::DrawGhost(const Platform& slope_platform, const Platform& horizontal_p
 }
 
 void Box::DrawMultiPlatformGhost(const std::vector<Platform>& platforms) {
-    if (!has_prediction_start) {
-        return;
-    }
-    
+    if (!has_prediction_start) return;
+
     if (!multi_platform_ghost_calculated) {
         CalculateMultiReferenceFrameTrajectory(platforms);
         multi_platform_ghost_calculated = true;
     }
-    
-    // Draw reference frame boxes (every 2 platforms = 1 frame)
-    // std::vector<const Platform*> sorted_platforms;
-    // for (const auto& platform : platforms) {
-    //     sorted_platforms.push_back(&platform);
-    // }
-    
-    // std::sort(sorted_platforms.begin(), sorted_platforms.end(), 
-    //     [](const Platform* a, const Platform* b) {
-    //         float a_left = std::min(a->top_left.x, a->top_right.x);
-    //         float b_left = std::min(b->top_left.x, b->top_right.x);
-    //         return a_left < b_left;
-    //     });
 
-        
-    
-    // // Draw reference frames
-    // Color frame_colors[] = { PURPLE, MAGENTA, BLUE, DARKGREEN, ORANGE, PINK };
-    // int num_colors = sizeof(frame_colors) / sizeof(frame_colors[0]);
-    
-    // for (int frame = 0; frame * 2 + 1 < (int)sorted_platforms.size(); frame++) {
-    //     const Platform* slope_platform = sorted_platforms[frame * 2];
-    //     const Platform* horizontal_platform = sorted_platforms[frame * 2 + 1];
-        
-    //     Color frame_color = frame_colors[frame % num_colors];
-        
-    //     // Calculate bounding box for this reference frame
-    //     float min_x = std::min({slope_platform->top_left.x, slope_platform->top_right.x, 
-    //     horizontal_platform->top_left.x, horizontal_platform->top_right.x}) - 20;
-    //     float max_x = std::max({slope_platform->top_left.x, slope_platform->top_right.x,
-    //                            horizontal_platform->top_left.x, horizontal_platform->top_right.x}) + 20;
-    //     float min_y = std::min({slope_platform->top_left.y, slope_platform->top_right.y,
-    //                            horizontal_platform->top_left.y, horizontal_platform->top_right.y}) - 50;
-    //     float max_y = std::max({slope_platform->top_left.y, slope_platform->top_right.y,
-    //                            horizontal_platform->top_left.y, horizontal_platform->top_right.y}) + 50;
-        
-    //     // Draw reference frame boundary
-    //     DrawRectangleLines((int)min_x, (int)min_y, (int)(max_x - min_x), (int)(max_y - min_y), frame_color);
-    //     DrawText(TextFormat("Frame %d", frame + 1), (int)min_x, (int)min_y - 20, 16, frame_color);
-    // }
-    // Draw reference frames — ONE per platform (left->right)
-    // std::vector<const Platform*> sorted_platforms;
-    // sorted_platforms.reserve(platforms.size());
-    // for (const auto& p : platforms) sorted_platforms.push_back(&p);
-    // std::sort(sorted_platforms.begin(), sorted_platforms.end(),
-    //     [](const Platform* a, const Platform* b) {
-    //         float ax = std::min(a->top_left.x, a->top_right.x);
-    //         float bx = std::min(b->top_left.x, b->top_right.x);
-    //         if (ax == bx) return a->id < b->id;
-    //         return ax < bx;
-    //     });
-
-    // Color frame_colors[] = { PURPLE, MAGENTA, BLUE, DARKGREEN, ORANGE, PINK };
-    // int num_colors = (int)(sizeof(frame_colors) / sizeof(frame_colors[0]));
-
-    // for (size_t i = 0; i < sorted_platforms.size(); ++i) {
-    //     const Platform* p = sorted_platforms[i];
-    //     Color c = frame_colors[i % num_colors];
-
-    //     // Simple visual: line along the top surface for each platform/frame
-    //     DrawLineEx(p->top_left, p->top_right, 3.0f, c);
-
-    //     // (Optional) tiny label
-    //     // DrawText(TextFormat("F%zu", i+1), (int)((p->top_left.x + p->top_right.x)/2), (int)(std::min(p->top_left.y, p->top_right.y) - 14), 12, c);
-    // }
-
-    
-    // Draw all trajectory segments (rest of the function stays exactly the same)
-    // Draw all trajectory segments + length labels / gap dimensions
+    // Draw all trajectory segments + labels/dimensions
     for (size_t i = 0; i < trajectory_segments.size(); i++) {
-        const auto& segment = trajectory_segments[i];
+        const auto& seg = trajectory_segments[i];
 
-        if (segment.platform == nullptr) {
-            // --- Projectile arc (keep your existing curved/polyline draw) ---
+        if (seg.platform == nullptr) {
+            // --- Projectile (jump) segment ---
             if (!projectile_trajectory_points.empty()) {
                 for (size_t j = 1; j < projectile_trajectory_points.size(); j++) {
                     DrawLineEx(projectile_trajectory_points[j-1], projectile_trajectory_points[j], 3.0f, MAGENTA);
@@ -831,68 +778,88 @@ void Box::DrawMultiPlatformGhost(const std::vector<Platform>& platforms) {
                 }
             }
 
-            // --- Gap dimensions: horizontal width and vertical height from launch to land ---
-            Vector2 launch = segment.start_position;
-            Vector2 land   = segment.end_position;
+            // Gap dimensions (width/height) from launch to land
+            Vector2 launch = seg.start_position;
+            Vector2 land   = seg.end_position;
             DrawGapDimensions(launch, land);
 
-            // Optional: show straight-line chord length of the jump (for reference)
+            // Chord length
             DrawSegmentLengthLabel(launch, land);
 
+            // Optional: arc-length label (real jump distance)
+            Vector2 labelPos = (!projectile_trajectory_points.empty())
+                ? projectile_trajectory_points[projectile_trajectory_points.size()/2]
+                : Vector2{ (launch.x + land.x)*0.5f, (launch.y + land.y)*0.5f };
+            labelPos.y -= 18.0f;
+            DrawTextBg(TextFormat("Jump=%.1f", seg.distance), labelPos, 14, WHITE, (Color){80,80,80,160});
         } else {
-            // --- On-platform segment: draw and label its travel length ---
-            Color line_color = (fabsf(segment.platform->rotation) > 5.0f) ? ORANGE : YELLOW;
-            DrawLineEx(segment.start_position, segment.end_position, 5.0f, line_color);
+            // --- On-platform segment ---
+            const bool isSlope = fabsf(seg.platform->rotation) > 5.0f;
+            DrawLineEx(seg.start_position, seg.end_position, 5.0f, isSlope ? ORANGE : YELLOW);
 
-            // Use stored distance if available (it includes along-slope measurement)
-            float segLen = (segment.distance > 0.0f) 
-                ? segment.distance 
-                : Vector2Distance(segment.start_position, segment.end_position);
+            float segLen = (seg.distance > 0.0f)
+                ? seg.distance
+                : Vector2Distance(seg.start_position, seg.end_position);
+            DrawSegmentLengthLabel(seg.start_position, seg.end_position, segLen);
 
-            DrawSegmentLengthLabel(segment.start_position, segment.end_position, segLen);
+            // === NEW: draw Δh from THIS segment's START height to the NEXT PLATFORM segment's START height ===
+            // (Skip over any projectile segments in between.)
+            size_t k = i + 1;
+            while (k < trajectory_segments.size() && trajectory_segments[k].platform == nullptr) {
+                k++;
+            }
+            if (k < trajectory_segments.size()) {
+                const auto& nextPlatSeg = trajectory_segments[k]; // guaranteed platform
+                float yA = seg.start_position.y;          // start height of current platform segment
+                float yB = nextPlatSeg.start_position.y;  // start height of next platform segment
+                if (fabsf(yA - yB) > 1.0f) {
+                    float xAtNext = nextPlatSeg.start_position.x; // draw the bracket at the junction x
+                    DrawVerticalDelta(xAtNext, yA, yB);
+                }
+            }
         }
 
-        // Mark transitions/endpoints
-        DrawCircleV(segment.end_position, 5, GREEN);
+        // Mark endpoints
+        DrawCircleV(seg.end_position, 5, GREEN);
     }
 
-    
-    // Draw starting position
+    // Starting position marker
     DrawCircleV(prediction_start_position, 4, PURPLE);
-    
-    // Draw final ghost box
+
+    // Final ghost box (at final_ghost_position)
     if (!trajectory_segments.empty()) {
-        float border = 2.0f;
+        const float border = 2.0f;
         DrawRectanglePro(
-            (Rectangle){ final_ghost_position.x, final_ghost_position.y, size.x, size.y }, 
-            (Vector2){ size.x * 0.5f, size.y * 0.5f }, 
+            (Rectangle){ final_ghost_position.x, final_ghost_position.y, size.x, size.y },
+            (Vector2){ size.x * 0.5f, size.y * 0.5f },
             0.0f,
             (Color){255, 255, 255, 100}
         );
-                               
-       DrawRectanglePro(
-           (Rectangle){ final_ghost_position.x, final_ghost_position.y, size.x - border * 2, size.y - border * 2 }, 
-           (Vector2){ (size.x - border * 2) * 0.5f, (size.y - border * 2) * 0.5f }, 
-           0.0f,
-           (Color){color.r, color.g, color.b, 80}
-       );
-   }
-   
-   // Draw debug info
-   if (!trajectory_segments.empty()) {
-       Vector2 text_pos = {final_ghost_position.x - 50, final_ghost_position.y - 60};
-       float total_distance = 0;
-       for (const auto& segment : trajectory_segments) {
-           total_distance += segment.distance;
-       }
-       DrawText(TextFormat("Total dist: %.1f", total_distance), text_pos.x, text_pos.y, 14, WHITE);
-       DrawText(TextFormat("Segments: %d", trajectory_segments.size()), text_pos.x, text_pos.y + 20, 14, WHITE);
-       
-       // Show how many reference frames are being calculated
-       int num_frames = (trajectory_segments.size() + 1) / 2; // Rough estimate
-       DrawText(TextFormat("Frames: %d", num_frames), text_pos.x, text_pos.y + 40, 14, WHITE);
-   }
+        DrawRectanglePro(
+            (Rectangle){ final_ghost_position.x, final_ghost_position.y, size.x - border * 2, size.y - border * 2 },
+            (Vector2){ (size.x - border * 2) * 0.5f, (size.y - border * 2) * 0.5f },
+            0.0f,
+            (Color){color.r, color.g, color.b, 80}
+        );
+    }
+
+    // Debug summary
+    if (!trajectory_segments.empty()) {
+        Vector2 text_pos = {final_ghost_position.x - 50, final_ghost_position.y - 60};
+        float total_distance = 0.0f;
+        for (const auto& s : trajectory_segments) total_distance += s.distance;
+
+        DrawText(TextFormat("Total dist: %.1f", total_distance), (int)text_pos.x, (int)text_pos.y, 14, WHITE);
+        DrawText(TextFormat("Segments: %d", (int)trajectory_segments.size()), (int)text_pos.x, (int)text_pos.y + 20, 14, WHITE);
+
+        int num_frames = (int)((trajectory_segments.size() + 1) / 2);
+        DrawText(TextFormat("Frames: %d", num_frames), (int)text_pos.x, (int)text_pos.y + 40, 14, WHITE);
+    }
 }
+
+
+
+
 
 void Box::ResetToOrigin() {
    position = origin_position;
@@ -1073,21 +1040,9 @@ void Box::DrawTwoLineCollisionDebug(const std::vector<Platform>& platforms) {
            }
        }
        
-       // Draw line from box corner to platform surface
        DrawLineEx(lines[i].start, endPoint, 2.0f, lineColor);
        
-       // Draw a small circle at the start of each line
        DrawCircleV(lines[i].start, 3.0f, lineColor);
-   }
-   
-   if (collisionInfo.hasCollision) {
-       // Draw collision point
-       DrawCircleV(collisionInfo.collisionPoint, 5.0f, GREEN);
-       
-       // Draw distance text
-       Vector2 textPos = {collisionInfo.collisionPoint.x + 10, collisionInfo.collisionPoint.y - 10};
-       DrawText(TextFormat("Dist: %.2f", collisionInfo.distanceToPlatform), textPos.x, textPos.y, 14, WHITE);
-       DrawText(TextFormat("Platform: %d", collisionInfo.platformId), textPos.x, textPos.y + 15, 14, WHITE);
    }
 }
 

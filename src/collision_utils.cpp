@@ -3,6 +3,13 @@
 #include <algorithm>
 #include <limits>
 
+void DrawTextBg(const char* txt, Vector2 pos, int fontSize, Color fg, Color bg) {
+    int w = MeasureText(txt, fontSize);
+    int h = fontSize + 4;
+    DrawRectangle((int)(pos.x - 4), (int)(pos.y - 2), w + 8, h, bg);
+    DrawText(txt, (int)pos.x, (int)pos.y, fontSize, fg);
+}
+
 std::vector<Vector2> CollisionUtils::GetRectangleCorners(const RotatedRectangle& rect) {
     Vector2 halfSize = { rect.size.x * 0.5f, rect.size.y * 0.5f };
     

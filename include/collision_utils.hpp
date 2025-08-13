@@ -6,6 +6,8 @@
 
 class Platform;
 
+void DrawTextBg(const char* txt, Vector2 pos, int fontSize, Color fg, Color bg);
+
 struct RotatedRectangle {
     Vector2 center;
     Vector2 size;
@@ -46,3 +48,4 @@ public:
     static float GetDistanceToPlatform(const LineSegment& line, const Platform& platform);
     static Vector2 GetClosestPointOnPlatform(const LineSegment& line, const Platform& platform);
 };
+

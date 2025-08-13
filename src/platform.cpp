@@ -58,6 +58,7 @@ void Platform::Draw() {
         local_top_right.x * sin_rot + local_top_right.y * cos_rot + position.y
     };
     top_right = rotated_top_right;
+
     
     // Draw measurement line across the rotated top edge
     if (edit_mode) {
@@ -110,6 +111,11 @@ void Platform::Draw() {
             Vector2 anchor_point = GetAnchorPosition();
             DrawCircleV(anchor_point, 6.0f, GREEN);
             DrawText("ANCHOR", anchor_point.x - 25, anchor_point.y - 20, 12, GREEN);
+        }
+    } else {
+        if (rotation != 0.0f) {
+            Vector2 text_pos = {position.x - 20, position.y + 20};
+            DrawTextBg(TextFormat("%.2f deg", rotation), text_pos, 16, BLACK, (Color){200,200,200,220});
         }
     }
 }
