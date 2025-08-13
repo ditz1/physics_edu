@@ -17,6 +17,65 @@ Box::~Box() {
 
 }
 
+// ===== Dimension/label helpers (pure UI) =====
+static inline float vecLength(Vector2 v) { return sqrtf(v.x*v.x + v.y*v.y); }
+static inline Vector2 vecSub(Vector2 a, Vector2 b) { return {a.x-b.x, a.y-b.y}; }
+static inline Vector2 vecAdd(Vector2 a, Vector2 b) { return {a.x+b.x, a.y+b.y}; }
+static inline Vector2 vecScale(Vector2 v, float s) { return {v.x*s, v.y*s}; }
+static inline Vector2 vecNorm(Vector2 v) { float L=vecLength(v); return (L>1e-6f)?Vector2{v.x/L,v.y/L}:Vector2{0,0}; }
+static inline Vector2 vecPerp(Vector2 v) { return {-v.y, v.x}; }
+
+// Compact text with a soft background for readability
+static void DrawTextBg(const char* txt, Vector2 pos, int fontSize, Color fg, Color bg) {
+    int w = MeasureText(txt, fontSize);
+    int h = fontSize + 4;
+    DrawRectangle((int)(pos.x - 4), (int)(pos.y - 2), w + 8, h, bg);
+    DrawText(txt, (int)pos.x, (int)pos.y, fontSize, fg);
+}
+
+// Label a segment with its length, offset a bit off the segment
+static void DrawSegmentLengthLabel(Vector2 A, Vector2 B, float overrideLen = -1.0f) {
+    float d = (overrideLen >= 0.0f) ? overrideLen : Vector2Distance(A, B);
+    Vector2 mid = { (A.x + B.x)*0.5f, (A.y + B.y)*0.5f };
+    Vector2 n = vecPerp(vecNorm(vecSub(B, A)));   // normal
+    Vector2 labelPos = vecAdd(mid, vecScale(n, -14.0f)); // slight offset above
+    DrawTextBg(TextFormat("%.1f", d), labelPos, 14, BLACK, (Color){255,255,255,180});
+}
+
+// Draw horizontal & vertical gap dimensions between launch and land points
+static void DrawGapDimensions(Vector2 launch, Vector2 land) {
+    // Horizontal at launch height; vertical at land x
+    Vector2 H0 = { launch.x, launch.y };
+    Vector2 H1 = { land.x,   launch.y };
+    Vector2 V0 = H1;
+    Vector2 V1 = { land.x, land.y };
+
+    // Lines
+    DrawLineEx(H0, H1, 2.0f, SKYBLUE); // width
+    DrawLineEx(V0, V1, 2.0f, LIME);    // height
+
+    // End caps (small ticks)
+    Vector2 hx = vecNorm(vecSub(H1, H0));
+    Vector2 hy = vecPerp(hx);
+    Vector2 vx = vecNorm(vecSub(V1, V0));
+    Vector2 vy = vecPerp(vx);
+    float tick = 6.0f;
+    DrawLineEx(vecAdd(H0, vecScale(hy, -tick)), vecAdd(H0, vecScale(hy,  tick)), 2.0f, SKYBLUE);
+    DrawLineEx(vecAdd(H1, vecScale(hy, -tick)), vecAdd(H1, vecScale(hy,  tick)), 2.0f, SKYBLUE);
+    DrawLineEx(vecAdd(V0, vecScale(vy, -tick)), vecAdd(V0, vecScale(vy,  tick)), 2.0f, LIME);
+    DrawLineEx(vecAdd(V1, vecScale(vy, -tick)), vecAdd(V1, vecScale(vy,  tick)), 2.0f, LIME);
+
+    // Labels
+    float dx = fabsf(land.x - launch.x);
+    float dy = fabsf(land.y - launch.y);
+    Vector2 hxLabelPos = { (H0.x + H1.x)*0.5f, H0.y - 16.0f };
+    Vector2 vyLabelPos = { V1.x + 6.0f, (V0.y + V1.y)*0.5f - 7.0f };
+
+    DrawTextBg(TextFormat("W=%.1f", dx), hxLabelPos, 14, BLACK, (Color){200,230,255,220});
+    DrawTextBg(TextFormat("H=%.1f", dy), vyLabelPos, 14, BLACK, (Color){200,255,200,220});
+}
+
+
 void Box::Update(float dt, const std::vector<Platform>& platforms) {
     // Store the previous collision state
     was_colliding_last_frame = is_colliding;
@@ -675,29 +734,46 @@ void Box::DrawMultiPlatformGhost(const std::vector<Platform>& platforms) {
 
     
     // Draw all trajectory segments (rest of the function stays exactly the same)
+    // Draw all trajectory segments + length labels / gap dimensions
     for (size_t i = 0; i < trajectory_segments.size(); i++) {
         const auto& segment = trajectory_segments[i];
-        
+    
         if (segment.platform == nullptr) {
-            // This is a projectile motion segment - draw the curved path
+            // --- Projectile arc (keep your existing curved/polyline draw) ---
             if (!projectile_trajectory_points.empty()) {
                 for (size_t j = 1; j < projectile_trajectory_points.size(); j++) {
                     DrawLineEx(projectile_trajectory_points[j-1], projectile_trajectory_points[j], 3.0f, MAGENTA);
                 }
-                // Draw projectile path points
-                for (const auto& point : projectile_trajectory_points) {
-                    DrawCircleV(point, 2.0f, PINK);
+                for (const auto& pt : projectile_trajectory_points) {
+                    DrawCircleV(pt, 2.0f, PINK);
                 }
             }
-        } else {
-            // Normal platform segment
-            Color line_color = (abs(segment.platform->rotation) > 5.0f) ? ORANGE : YELLOW;
-            DrawLineEx(segment.start_position, segment.end_position, 5.0f, line_color);
-        }
         
-        // Draw transition points
+            // --- Gap dimensions: horizontal width and vertical height from launch to land ---
+            Vector2 launch = segment.start_position;
+            Vector2 land   = segment.end_position;
+            DrawGapDimensions(launch, land);
+        
+            // Optional: show straight-line chord length of the jump (for reference)
+            DrawSegmentLengthLabel(launch, land);
+        
+        } else {
+            // --- On-platform segment: draw and label its travel length ---
+            Color line_color = (fabsf(segment.platform->rotation) > 5.0f) ? ORANGE : YELLOW;
+            DrawLineEx(segment.start_position, segment.end_position, 5.0f, line_color);
+        
+            // Use stored distance if available (it includes along-slope measurement)
+            float segLen = (segment.distance > 0.0f) 
+                ? segment.distance 
+                : Vector2Distance(segment.start_position, segment.end_position);
+        
+            DrawSegmentLengthLabel(segment.start_position, segment.end_position, segLen);
+        }
+    
+        // Mark transitions/endpoints
         DrawCircleV(segment.end_position, 5, GREEN);
     }
+
     
     // Draw starting position
     DrawCircleV(prediction_start_position, 4, PURPLE);
