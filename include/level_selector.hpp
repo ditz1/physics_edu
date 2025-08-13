@@ -76,6 +76,8 @@ public:
     bool LoadSelectedLevel(std::vector<Platform>& platforms, Box& box, Gorilla& gorilla);
     void LoadNewLevel(std::vector<Platform>& platforms, Box& box, Gorilla& gorilla);
     void UpdateSequentialTransition(float dt, std::vector<Platform>& platforms, Box& box, Gorilla& gorilla);
+    void SaveCurrentLevel(const std::vector<Platform>& platforms, const Box& box, const Gorilla& gorilla);
+
     
 private:
     std::vector<std::string> GetAvailableFiles(int level);

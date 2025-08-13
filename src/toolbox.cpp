@@ -64,6 +64,7 @@ void Toolbox::Update(float dt, std::vector<Platform>& platforms, const Box& box,
         SavePlatformConfiguration(platforms, box, gorilla);
     }
     
+    
     // toggle platform creation mode with '1' key
     if (IsKeyPressed(KEY_ONE)) {
         creating_platform = !creating_platform;

@@ -1,6 +1,56 @@
 #include "level_selector.hpp"
 #include <fstream>
 #include <sstream>
+#include <filesystem>
+
+
+void LevelSelector::SaveCurrentLevel(const std::vector<Platform>& platforms, const Box& box, const Gorilla& gorilla) {
+    // Resolve the path for the currently selected level/variant
+    std::string level_path = GetLevelPath(selected_level, selected_variant);
+    if (level_path.empty()) {
+        std::cout << "[SaveCurrentLevel] Error: level path is empty for L="
+                  << selected_level << " V=" << selected_variant << std::endl;
+        return;
+    }
+
+    // Ensure directory exists
+    std::filesystem::path p(level_path);
+    if (p.has_parent_path()) {
+        std::error_code ec;
+        std::filesystem::create_directories(p.parent_path(), ec);
+        if (ec) {
+            std::cout << "[SaveCurrentLevel] Failed to create directories for: " << p.parent_path().string()
+                      << " (" << ec.message() << ")" << std::endl;
+            return;
+        }
+    }
+
+    // Open (truncate) and write the same format as Toolbox::SavePlatformConfiguration
+    std::ofstream file(level_path, std::ios::trunc);
+    if (!file.is_open()) {
+        std::cout << "[SaveCurrentLevel] Error opening: " << level_path << std::endl;
+        return;
+    }
+
+    // Box first
+    file << "BOX, " << box.position.x << ", " << box.position.y << "\n";
+
+    // Gorilla next
+    file << "GORILLA, " << gorilla.position.x << ", " << gorilla.position.y << "\n";
+
+    // Then all platforms (matches your "R, x, y, w, h, rotation")
+    for (const Platform& platform : platforms) {
+        file << "R, "
+             << platform.position.x << ", " << platform.position.y << ", "
+             << platform.size.x     << ", " << platform.size.y     << ", "
+             << platform.rotation   << "\n";
+    }
+
+    file.close();
+    std::cout << "[SaveCurrentLevel] Overwrote level " << selected_level
+              << "-" << selected_variant << " at " << level_path << std::endl;
+}
+
 
 void LevelSelector::Draw() {
     if (!is_active) return;

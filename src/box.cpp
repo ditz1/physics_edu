@@ -25,6 +25,48 @@ static inline Vector2 vecScale(Vector2 v, float s) { return {v.x*s, v.y*s}; }
 static inline Vector2 vecNorm(Vector2 v) { float L=vecLength(v); return (L>1e-6f)?Vector2{v.x/L,v.y/L}:Vector2{0,0}; }
 static inline Vector2 vecPerp(Vector2 v) { return {-v.y, v.x}; }
 
+
+// === Analytic arc length for projectile: x(t)=v0x t, y(t)=v0y t + 0.5 g t^2 ===
+// s(T) = ∫0→T sqrt( v0x^2 + (v0y + g t)^2 ) dt
+static float ArcLenProjectile(Vector2 v0, float g, float T) {
+    if (T <= 0.0f) return 0.0f;
+    // Work in double for stability
+    const double a = (double)v0.x * (double)v0.x + (double)v0.y * (double)v0.y; // v0^2
+    const double b = 2.0 * (double)v0.y * (double)g;
+    const double c = (double)g * (double)g; // g^2
+    auto S = [&](double t){ return sqrt(c*t*t + b*t + a); };
+    auto F = [&](double t){
+        // Indefinite integral of sqrt(c t^2 + b t + a)
+        const double ct = 2.0*c*t + b;
+        const double St = S(t);
+        const double k  = 4.0*a*c - b*b;       // >= 0 for typical projectile
+        const double c32 = pow(c, 1.5);
+        double term1 = (ct * St) / (4.0*c);
+        // Guard log() arg
+        double logarg = 2.0*sqrt(c)*St + ct;
+        if (logarg < 1e-12) logarg = 1e-12;
+        double term2 = (k / (8.0*c32)) * log(logarg);
+        return term1 + term2;
+    };
+    double result = F((double)T) - F(0.0);
+    if (!std::isfinite(result) || result < 0.0) {
+        // Very rare: fall back to quick numeric quad (good enough for UI + totals)
+        const int N = 64;
+        double s = 0.0, dt = T / N;
+        double vy = (double)v0.y;
+        double vx = (double)v0.x;
+        for (int i=0;i<N;i++){
+            double t0 = i*dt, t1=(i+1)*dt;
+            double v0m = hypot(vx, vy + g*t0);
+            double v1m = hypot(vx, vy + g*t1);
+            s += 0.5*(v0m+v1m)*dt;
+        }
+        result = s;
+    }
+    return (float)result;
+}
+
+
 // Compact text with a soft background for readability
 static void DrawTextBg(const char* txt, Vector2 pos, int fontSize, Color fg, Color bg) {
     int w = MeasureText(txt, fontSize);
@@ -737,7 +779,7 @@ void Box::DrawMultiPlatformGhost(const std::vector<Platform>& platforms) {
     // Draw all trajectory segments + length labels / gap dimensions
     for (size_t i = 0; i < trajectory_segments.size(); i++) {
         const auto& segment = trajectory_segments[i];
-    
+
         if (segment.platform == nullptr) {
             // --- Projectile arc (keep your existing curved/polyline draw) ---
             if (!projectile_trajectory_points.empty()) {
@@ -748,28 +790,28 @@ void Box::DrawMultiPlatformGhost(const std::vector<Platform>& platforms) {
                     DrawCircleV(pt, 2.0f, PINK);
                 }
             }
-        
+
             // --- Gap dimensions: horizontal width and vertical height from launch to land ---
             Vector2 launch = segment.start_position;
             Vector2 land   = segment.end_position;
             DrawGapDimensions(launch, land);
-        
+
             // Optional: show straight-line chord length of the jump (for reference)
             DrawSegmentLengthLabel(launch, land);
-        
+
         } else {
             // --- On-platform segment: draw and label its travel length ---
             Color line_color = (fabsf(segment.platform->rotation) > 5.0f) ? ORANGE : YELLOW;
             DrawLineEx(segment.start_position, segment.end_position, 5.0f, line_color);
-        
+
             // Use stored distance if available (it includes along-slope measurement)
             float segLen = (segment.distance > 0.0f) 
                 ? segment.distance 
                 : Vector2Distance(segment.start_position, segment.end_position);
-        
+
             DrawSegmentLengthLabel(segment.start_position, segment.end_position, segLen);
         }
-    
+
         // Mark transitions/endpoints
         DrawCircleV(segment.end_position, 5, GREEN);
     }
@@ -1350,7 +1392,7 @@ void Box::CalculateMultiReferenceFrameTrajectory(const std::vector<Platform>& pl
             }
         }
 
-        // Distances
+        // Distances along the current platform
         float dist_to_clamped = fabsf(SignedDistanceAlong(*cur_plat, cur_pos, clamped_end));
         float stop_dist       = CalculateStoppingDistanceOnPlatform(cur_speed, *cur_plat);
 
@@ -1395,7 +1437,7 @@ void Box::CalculateMultiReferenceFrameTrajectory(const std::vector<Platform>& pl
         }
 
         if (!best_plat) {
-            // No landing found: draw a short arc and finish
+            // No landing found: simulate a short arc for display AND count its distance
             projectile_trajectory_points.clear();
             Vector2 cur = launch_pos, v = launch_vel;
             float dt = 0.02f, T = 0.6f;
@@ -1405,6 +1447,15 @@ void Box::CalculateMultiReferenceFrameTrajectory(const std::vector<Platform>& pl
                 cur = Vector2Add(cur, Vector2Scale(v, dt));
                 projectile_trajectory_points.push_back(cur);
             }
+
+            // Record this "partial jump" as a trajectory segment with arc length
+            TrajectorySegment arc_seg;
+            arc_seg.start_position = launch_pos;
+            arc_seg.end_position   = cur;
+            arc_seg.platform       = nullptr;
+            arc_seg.distance       = ArcLenProjectile(launch_vel, gravity, T);
+            trajectory_segments.push_back(arc_seg);
+
             final_ghost_position = cur;
             multi_platform_ghost_calculated = true;
             return;
@@ -1422,14 +1473,24 @@ void Box::CalculateMultiReferenceFrameTrajectory(const std::vector<Platform>& pl
             projectile_trajectory_points.push_back(pt);
         }
 
+        // Also record the jump as a segment with its true arc length
+        {
+            TrajectorySegment arc_seg;
+            arc_seg.start_position = launch_pos;
+            arc_seg.end_position   = best_hit;
+            arc_seg.platform       = nullptr; // projectile arc
+            arc_seg.distance       = ArcLenProjectile(launch_vel, gravity, best_t);
+            trajectory_segments.push_back(arc_seg);
+        }
+
         // Inelastic landing: keep tangential component along the landing platform
         Vector2 v_impact = { launch_vel.x, launch_vel.y + gravity * best_t };
         Vector2 t_new = UnitTangent(*best_plat);
         float speed_after = fabsf(Vector2DotProduct(v_impact, t_new));
 
         // Continue on landing platform
-        cur_pos  = best_hit;
-        cur_plat = best_plat;
+        cur_pos   = best_hit;
+        cur_plat  = best_plat;
         cur_speed = speed_after;
     }
 
@@ -1437,6 +1498,7 @@ void Box::CalculateMultiReferenceFrameTrajectory(const std::vector<Platform>& pl
     final_ghost_position = cur_pos;
     multi_platform_ghost_calculated = true;
 }
+
 
 
 

@@ -253,6 +253,11 @@ int main(int argc, char* argv[]) {
            level_selector.is_active = !level_selector.is_active;
        }
 
+       if (IsKeyPressed(KEY_K)) {
+            level_selector.SaveCurrentLevel(all_platforms, box, gorilla);
+    
+        }
+
        if (IsKeyPressed(KEY_B)) {
            box.ResetToOrigin();
            // Reset level switching state
