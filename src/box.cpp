@@ -1088,173 +1088,277 @@ const Platform* Box::FindNextPlatformToRight(const Platform& current_platform, c
 // ================================
                         
 void Box::CalculateMultiReferenceFrameTrajectory(const std::vector<Platform>& platforms) {
+    // Build a robust forward-only (low->high id) trajectory that:
+    // - clamps each on-platform segment to the FIRST forward intersection with any higher-id platform
+    // - accounts for that lost distance in both drawing and kinematics
+    // - handles connected transitions vs projectile gaps
+    // - keeps everything aligned with your inelastic/friction-only formulas
+
     trajectory_segments.clear();
     projectile_trajectory_points.clear();
-    
-    // Start from bottom right corner to match collision detection
-    float box_rotation_rad = rotation * DEG2RAD;
-    float cos_rot = cosf(box_rotation_rad);
-    float sin_rot = sinf(box_rotation_rad);
-    
-    Vector2 local_right_bottom = { size.x * 0.5f, size.y * 0.5f };
-    Vector2 current_position = {
-        local_right_bottom.x * cos_rot - local_right_bottom.y * sin_rot + position.x,
-        local_right_bottom.x * sin_rot + local_right_bottom.y * cos_rot + position.y
-    };
-    
-    // Find starting platform
-    const Platform* current_platform = nullptr;
-    if (current_platform_id >= 0 && current_platform_id < platforms.size()) {
-        current_platform = &platforms[current_platform_id];
-    } else {
-        for (const auto& platform : platforms) {
-            if (IsPointOnPlatform(current_position, platform)) {
-                current_platform = &platform;
-                break;
-            }
-        }
-    }
-    
-    if (!current_platform) {
-        std::cout << "No starting platform found!" << std::endl;
+    multi_platform_ghost_calculated = false;
+
+    if (platforms.empty()) {
+        final_ghost_position = position;
+        multi_platform_ghost_calculated = true;
         return;
     }
-    
-    // Calculate current speed along platform
-    float current_speed = fabs(Vector2DotProduct(velocity, GetPlatformDirection(*current_platform)));
-    if (current_speed < 0.1f) current_speed = 5.0f; // Minimum speed assumption
-    
-    std::cout << "Starting trajectory calculation from platform " << current_platform->id 
-              << " with speed " << current_speed << std::endl;
-    
-    // Process platforms starting from current one
-    Vector2 segment_start = current_position;
-    float segment_speed = current_speed;
-    const Platform* processing_platform = current_platform;
-    
-    while (processing_platform) {
-        std::cout << "Processing platform " << processing_platform->id << std::endl;
-        
-        // Find next platform by ID
-        const Platform* next_platform = nullptr;
+
+    // Start from BOX bottom-right corner (your collision basis)
+    float ang = rotation * DEG2RAD;
+    float c = cosf(ang), s = sinf(ang);
+    Vector2 local_rb = { size.x * 0.5f, size.y * 0.5f };
+    Vector2 cur_pos = {
+        local_rb.x * c - local_rb.y * s + position.x,
+        local_rb.x * s + local_rb.y * c + position.y
+    };
+
+    // Locate starting platform (prefer current_platform_id)
+    const Platform* cur_plat = nullptr;
+    if (current_platform_id >= 0 && current_platform_id < (int)platforms.size()) {
+        cur_plat = &platforms[current_platform_id];
+    } else {
         for (const auto& p : platforms) {
-            if (p.id == processing_platform->id + 1) {
-                next_platform = &p;
-                break;
-            }
-        }
-        
-        Vector2 segment_end;
-        bool reaches_next_platform = false;
-        
-        if (next_platform) {
-            // Check if current platform intersects with next platform
-            Vector2 intersection;
-            bool platforms_intersect = CheckCollisionLines(
-                processing_platform->top_left, processing_platform->top_right,
-                next_platform->top_left, next_platform->top_right, &intersection
-            );
-            
-            if (platforms_intersect) {
-                // Platforms intersect - use intersection as transition point
-                segment_end = intersection;
-                reaches_next_platform = true;
-                std::cout << "Platforms " << processing_platform->id << " and " << next_platform->id 
-                          << " intersect at (" << intersection.x << ", " << intersection.y << ")" << std::endl;
-            } else {
-                // No intersection - use end of current platform
-                segment_end = GetRightEndOfPlatform(*processing_platform);
-                std::cout << "No intersection - using platform end" << std::endl;
-            }
-        } else {
-            // No next platform - use end of current platform
-            segment_end = GetRightEndOfPlatform(*processing_platform);
-            std::cout << "No next platform found" << std::endl;
-        }
-        
-        // Calculate distance to segment end
-        float distance_to_end = Vector2Distance(segment_start, segment_end);
-        
-        // Check if box stops before reaching the end
-        float stopping_distance = CalculateStoppingDistanceOnPlatform(segment_speed, *processing_platform);
-        
-        if (stopping_distance <= distance_to_end) {
-            // Box stops on this platform before reaching the end
-            Vector2 platform_direction = GetPlatformDirection(*processing_platform);
-            Vector2 stop_position = Vector2Add(segment_start, Vector2Scale(platform_direction, stopping_distance));
-            
-            TrajectorySegment segment;
-            segment.start_position = segment_start;
-            segment.end_position = stop_position;
-            segment.platform = processing_platform;
-            segment.distance = stopping_distance;
-            trajectory_segments.push_back(segment);
-            
-            final_ghost_position = stop_position;
-            std::cout << "Box stops on platform " << processing_platform->id 
-                      << " after " << stopping_distance << " units" << std::endl;
-            break;
-        }
-        
-        // Box reaches the segment end
-        float exit_velocity = CalculateFinalVelocity(segment_speed, *processing_platform, distance_to_end);
-        
-        // Add segment for this platform
-        TrajectorySegment platform_segment;
-        platform_segment.start_position = segment_start;
-        platform_segment.end_position = segment_end;
-        platform_segment.platform = processing_platform;
-        platform_segment.distance = distance_to_end;
-        trajectory_segments.push_back(platform_segment);
-        
-        std::cout << "Platform " << processing_platform->id << ": traveled " << distance_to_end 
-                  << " units to (" << segment_end.x << ", " << segment_end.y 
-                  << "), exit velocity: " << exit_velocity << std::endl;
-        
-        if (reaches_next_platform && next_platform) {
-            // Smooth transition to next platform
-            segment_start = segment_end;
-            segment_speed = exit_velocity;
-            processing_platform = next_platform;
-            std::cout << "Smooth transition to platform " << next_platform->id << std::endl;
-        } else if (next_platform) {
-            // Need projectile motion to reach next platform
-            std::cout << "Calculating projectile motion to platform " << next_platform->id << std::endl;
-            
-            // Calculate launch velocity
-            float launch_angle = processing_platform->rotation * DEG2RAD;
-            Vector2 launch_velocity = {
-                exit_velocity * cos(launch_angle),
-                exit_velocity * sin(launch_angle)
-            };
-            
-            // Simulate projectile motion
-            Vector2 landing_position = CalculateProjectileTrajectory(segment_end, launch_velocity, {*next_platform});
-            
-            // Check if we landed on the target platform
-            if (IsPointOnPlatform(landing_position, *next_platform)) {
-                // Continue from landing position
-                segment_start = landing_position;
-                segment_speed = exit_velocity * 0.8f; // Energy loss on landing
-                processing_platform = next_platform;
-                std::cout << "Successful landing on platform " << next_platform->id << std::endl;
-            } else {
-                // Missed the platform
-                final_ghost_position = landing_position;
-                std::cout << "Missed platform " << next_platform->id << std::endl;
-                break;
-            }
-        } else {
-            // No more platforms
-            final_ghost_position = segment_end;
-            std::cout << "No more platforms - trajectory ends" << std::endl;
-            break;
+            if (IsPointOnPlatform(cur_pos, p)) { cur_plat = &p; break; }
         }
     }
-    
+    if (!cur_plat) {
+        final_ghost_position = cur_pos;
+        multi_platform_ghost_calculated = true;
+        return;
+    }
+
+    auto dir_of = [&](const Platform& P)->Vector2 { return GetPlatformDirection(P); }; // normalized
+    float cur_speed = fabsf(Vector2DotProduct(velocity, dir_of(*cur_plat)));
+    if (cur_speed < 0.001f) cur_speed = 5.0f; // tiny nudge to advance prediction
+
+    // Compute along-slope distance
+    auto slope_dist_AB = [&](Vector2 A, Vector2 B, const Platform& P)->float {
+        Vector2 d = Vector2Subtract(B, A);
+        Vector2 t = dir_of(P);
+        float proj = Vector2DotProduct(d, t);
+        return fabsf(proj);
+    };
+
+    // Find FIRST forward intersection point between the current platform's
+    // forward segment [cur_pos -> right_end] and ANY higher-id platform's top edge.
+    auto find_first_forward_intersection = [&](const Platform& cur, Vector2 from_pos, Vector2 right_end,
+                                               Vector2& out_hit)->bool {
+        Vector2 fwd = dir_of(cur);
+        if (fwd.x < 0) fwd = Vector2Scale(fwd, -1.0f); // enforce left->right measure
+
+        float max_along = slope_dist_AB(from_pos, right_end, cur);
+        float best_along = max_along + 1e6f;
+        bool found = false;
+
+        for (const auto& cand : platforms) {
+            if (cand.id <= cur.id) continue; // forward only
+            Vector2 hit;
+            if (CheckCollisionLines(from_pos, right_end, cand.top_left, cand.top_right, &hit)) {
+                // measure forward distance along current platform from 'from_pos'
+                float along = Vector2DotProduct(Vector2Subtract(hit, from_pos), fwd);
+                if (along > 1e-4f && along < best_along) {
+                    best_along = along;
+                    out_hit = hit;
+                    found = true;
+                }
+            }
+        }
+        return found;
+    };
+
+    // Connected "next" platform from a given point on the current platform
+    auto find_connected_next = [&](const Platform& cur, Vector2 from_point)->std::pair<const Platform*, Vector2> {
+        const Platform* best = nullptr;
+        Vector2 best_xfer = from_point;
+        float best_score = 1e30f;
+
+        Vector2 fwd = dir_of(cur);
+        if (fwd.x < 0) fwd = Vector2Scale(fwd, -1.0f);
+
+        for (const auto& cand : platforms) {
+            if (cand.id <= cur.id) continue; // forward only
+            Vector2 intersection;
+            bool intersects = CheckCollisionLines(cur.top_left, cur.top_right,
+                                                  cand.top_left, cand.top_right, &intersection);
+            float score = 1e30f;
+            Vector2 xfer_point = from_point;
+
+            if (intersects) {
+                // Only use intersections that are forward from 'from_point'
+                float along = Vector2DotProduct(Vector2Subtract(intersection, from_point), fwd);
+                if (along > -1e-4f) {
+                    score = along;
+                    xfer_point = intersection;
+                }
+            } else {
+                // endpoint proximity (treat as connected if very close)
+                Vector2 cur_right = GetRightEndOfPlatform(cur);
+                if (Vector2DotProduct(Vector2Subtract(cur_right, from_point), fwd) < -1e-4f) {
+                    // right end is behind from_point; skip proximity
+                } else {
+                    Vector2 cand_left = (cand.top_left.x < cand.top_right.x) ? cand.top_left : cand.top_right;
+                    float gap = Vector2Distance(cur_right, cand_left);
+                    if (gap < 20.0f) { // treat as directly connected
+                        score = Vector2DotProduct(Vector2Subtract(cur_right, from_point), fwd);
+                        xfer_point = cur_right;
+                    }
+                }
+            }
+
+            if (score < best_score) {
+                best_score = score;
+                best = &cand;
+                best_xfer = xfer_point;
+            }
+        }
+
+        if (best && best_score < 1e29f) return {best, best_xfer};
+        return {nullptr, from_point};
+    };
+
+    // Projectile sim (returns first landing on any higher-id platform)
+    auto simulate_projectile = [&](Vector2 launch_pos, Vector2 launch_vel, int current_id)
+        -> std::tuple<bool, Vector2, const Platform*, float> {
+        const float dt = 0.015f;
+        const float max_time = 10.0f;
+
+        Vector2 p = launch_pos;
+        Vector2 v = launch_vel;
+        projectile_trajectory_points.clear();
+        projectile_trajectory_points.push_back(p);
+
+        float arc_len = 0.0f;
+        for (float t = 0.0f; t < max_time; t += dt) {
+            Vector2 prev = p;
+
+            v.y += gravity * dt;
+            p = Vector2Add(p, Vector2Scale(v, dt));
+
+            // forward-only guard
+            if (p.x < prev.x) p.x = prev.x + 0.001f;
+
+            const Platform* best_plat = nullptr;
+            Vector2 best_hit; float best_d = 1e30f;
+
+            for (const auto& cand : platforms) {
+                if (cand.id <= current_id) continue;
+                Vector2 hit;
+                if (CheckCollisionLines(prev, p, cand.top_left, cand.top_right, &hit)) {
+                    if (prev.y <= hit.y && v.y > 0) {
+                        float d = Vector2Distance(prev, hit);
+                        if (d < best_d) { best_d = d; best_plat = &cand; best_hit = hit; }
+                    }
+                }
+            }
+
+            if (best_plat) {
+                arc_len += Vector2Distance(prev, best_hit);
+
+                TrajectorySegment arc;
+                arc.start_position = launch_pos;
+                arc.end_position   = best_hit;
+                arc.platform       = nullptr;
+                arc.distance       = arc_len;
+                trajectory_segments.push_back(arc);
+
+                projectile_trajectory_points.push_back(best_hit);
+
+                Vector2 tang = dir_of(*best_plat);
+                float speed_on_land = fabsf(Vector2DotProduct(v, tang));
+                return {true, best_hit, best_plat, speed_on_land};
+            }
+
+            arc_len += Vector2Distance(prev, p);
+            projectile_trajectory_points.push_back(p);
+
+            if (p.y > GetScreenHeight() + 200.0f || p.x > GetScreenWidth() + 200.0f) break;
+        }
+        return {false, p, (const Platform*)nullptr, 0.0f};
+    };
+
+    // MAIN traversal
+    int safety = 0;
+    while (cur_plat && safety++ < 64) {
+        Vector2 dir = dir_of(*cur_plat);
+        if (dir.x < 0) dir = Vector2Scale(dir, -1.0f); // enforce forward measure
+
+        Vector2 right_end = GetRightEndOfPlatform(*cur_plat);
+
+        // NEW: clamp end point to FIRST forward intersection (if any)
+        Vector2 clamped_end = right_end;
+        Vector2 hit_point;
+        if (find_first_forward_intersection(*cur_plat, cur_pos, right_end, hit_point)) {
+            clamped_end = hit_point;
+        }
+
+        float dist_to_end = slope_dist_AB(cur_pos, clamped_end, *cur_plat);
+
+        // Check if we stop before reaching the clamped end
+        float stop_dist = CalculateStoppingDistanceOnPlatform(cur_speed, *cur_plat);
+        if (stop_dist <= dist_to_end + 1e-6f) {
+            Vector2 stop_pos = Vector2Add(cur_pos, Vector2Scale(dir, stop_dist));
+
+            TrajectorySegment seg;
+            seg.start_position = cur_pos;
+            seg.end_position   = stop_pos;
+            seg.platform       = cur_plat;
+            seg.distance       = stop_dist;
+            trajectory_segments.push_back(seg);
+
+            final_ghost_position = stop_pos;
+            multi_platform_ghost_calculated = true;
+            return;
+        }
+
+        // We reach clamped_end; compute exit speed for the TRAVELED distance
+        float exit_speed = CalculateFinalVelocity(cur_speed, *cur_plat, dist_to_end);
+
+        // Record segment to clamped_end
+        {
+            TrajectorySegment seg;
+            seg.start_position = cur_pos;
+            seg.end_position   = clamped_end;
+            seg.platform       = cur_plat;
+            seg.distance       = dist_to_end;
+            trajectory_segments.push_back(seg);
+        }
+
+        cur_pos   = clamped_end;
+        cur_speed = exit_speed;
+
+        // Try a connected transition FROM clamped_end
+        auto [next_plat, xfer_pt] = find_connected_next(*cur_plat, clamped_end);
+        if (next_plat) {
+            cur_pos   = xfer_pt;           // usually equal to clamped_end if it was an intersection
+            cur_plat  = next_plat;
+            cur_speed = fabsf(cur_speed);  // carry tangential speed
+            continue;
+        }
+
+        // No connection → projectile launch from clamped_end
+        Vector2 launch_vel = Vector2Scale(dir, cur_speed);
+        if (launch_vel.x < 0) launch_vel.x = 0.001f;
+
+        auto [landed, land_pt, land_plat, land_speed] =
+            simulate_projectile(cur_pos, launch_vel, cur_plat->id);
+
+        if (!landed || !land_plat) {
+            final_ghost_position = land_pt; // flew off/ground
+            multi_platform_ghost_calculated = true;
+            return;
+        }
+
+        // Continue from landing
+        cur_pos   = land_pt;
+        cur_plat  = land_plat;
+        cur_speed = land_speed;
+    }
+
+    final_ghost_position = cur_pos;
     multi_platform_ghost_calculated = true;
-    std::cout << "Trajectory calculation complete with " << trajectory_segments.size() << " segments" << std::endl;
 }
+
 
 // NEW: Find connected platform groups
 std::vector<std::vector<const Platform*>> Box::FindPlatformGroups(const std::vector<Platform>& platforms) {
@@ -1390,104 +1494,94 @@ Vector2 Box::CalculateProjectileToGroup(Vector2 launch_pos, float launch_speed, 
 
 // NEW: Calculate projectile motion trajectory
 Vector2 Box::CalculateProjectileTrajectory(Vector2 launch_position, Vector2 launch_velocity, const std::vector<Platform>& platforms) {
-   // Projectile motion parameters
-   float dt = 0.02f; // Smaller time step for more accurate trajectory
-   Vector2 current_pos = launch_position;
-   Vector2 current_vel = launch_velocity;
-   float max_time = 10.0f; // Maximum simulation time to prevent infinite loops
-   float time = 0.0f;
-   
-   // Store projectile trajectory points for drawing
-   std::vector<Vector2> projectile_path;
-   projectile_path.push_back(current_pos);
-   
-   while (time < max_time) {
-       // Store previous position for collision checking
-       Vector2 prev_pos = current_pos;
-       
-       // Update velocity first (gravity affects velocity)
-       current_vel.y += gravity * dt;
-       
-       // Then update position using current velocity
-       current_pos = Vector2Add(current_pos, Vector2Scale(current_vel, dt));
-       
-       // Add point to trajectory path every few iterations for smoother drawing
-       if ((int)(time / dt) % 3 == 0) { // Every 3rd point
-           projectile_path.push_back(current_pos);
-       }
-       
-       // Check for collision with any platform
-       for (const auto& platform : platforms) {
-           // Check if trajectory crosses platform top surface
-           Vector2 intersection;
-           bool crosses_platform = CheckCollisionLines(prev_pos, current_pos, platform.top_left, platform.top_right, &intersection);
-           
-           if (crosses_platform) {
-               // Make sure we're hitting the platform from above
-               if (prev_pos.y <= intersection.y && current_vel.y > 0) {
-                   // Add final point to trajectory
-                   projectile_path.push_back(intersection);
-                   
-                   // Add projectile segment to trajectory
-                   TrajectorySegment projectile_segment;
-                   projectile_segment.start_position = launch_position;
-                   projectile_segment.end_position = intersection;
-                   projectile_segment.platform = nullptr; // No platform for projectile motion
-                   projectile_segment.distance = Vector2Distance(launch_position, intersection);
-                   trajectory_segments.push_back(projectile_segment);
-                   
-                   // Store projectile path for drawing
-                   projectile_trajectory_points = projectile_path;
-                   
-                   // CONTINUE SIMULATION: Calculate movement along the landing platform
-                   Vector2 final_position = CalculatePostLandingTrajectory(intersection, current_vel, platform);
-                   
-                   return final_position;
-               }
-           }
-       }
-       
-       // Check if projectile hits ground (screen bottom)
-       if (current_pos.y >= GetScreenHeight() - 10) { // Small buffer from bottom
-           Vector2 ground_collision = { current_pos.x, (float)GetScreenHeight() - 10 };
-           projectile_path.push_back(ground_collision);
-           
-           // Add projectile segment
-           TrajectorySegment projectile_segment;
-           projectile_segment.start_position = launch_position;
-           projectile_segment.end_position = ground_collision;
-           projectile_segment.platform = nullptr;
-           projectile_segment.distance = Vector2Distance(launch_position, ground_collision);
-           trajectory_segments.push_back(projectile_segment);
-           
-           // Store projectile path for drawing
-           projectile_trajectory_points = projectile_path;
-           
-           return ground_collision;
-       }
-       
-       // Check if projectile goes off screen horizontally
-       if (current_pos.x < 0 || current_pos.x > GetScreenWidth()) {
-           projectile_path.push_back(current_pos);
-           
-           TrajectorySegment projectile_segment;
-           projectile_segment.start_position = launch_position;
-           projectile_segment.end_position = current_pos;
-           projectile_segment.platform = nullptr;
-           projectile_segment.distance = Vector2Distance(launch_position, current_pos);
-           trajectory_segments.push_back(projectile_segment);
-           
-           projectile_trajectory_points = projectile_path;
-           return current_pos;
-       }
-       
-       time += dt;
-   }
-   
-   // If no collision found, return the final position
-   projectile_trajectory_points = projectile_path;
-   return current_pos;
+    // Projectile motion parameters
+    float dt = 0.02f; // Smaller time step for more accurate trajectory
+    Vector2 current_pos = launch_position;
+    Vector2 current_vel = launch_velocity;
+    float max_time = 10.0f; // Safety cap
+    float time = 0.0f;
+
+    // Store projectile trajectory points for drawing the arc
+    std::vector<Vector2> projectile_path;
+    projectile_path.push_back(current_pos);
+
+    while (time < max_time) {
+        // Previous position for segment/line intersection
+        Vector2 prev_pos = current_pos;
+
+        // Update projectile state (kinematics only)
+        current_vel.y += gravity * dt;
+        current_pos = Vector2Add(current_pos, Vector2Scale(current_vel, dt));
+
+        // Check intersection with each candidate platform's top edge
+        for (const auto& platform : platforms) {
+            Vector2 intersection;
+            bool crosses = CheckCollisionLines(prev_pos, current_pos, platform.top_left, platform.top_right, &intersection);
+
+            if (crosses) {
+                // Ensure we're landing from above (downward motion)
+                if (prev_pos.y <= intersection.y && current_vel.y > 0) {
+                    // Clamp the last point to the exact intersection
+                    projectile_path.push_back(intersection);
+
+                    // Record the projectile segment only
+                    TrajectorySegment projectile_segment;
+                    projectile_segment.start_position = launch_position;
+                    projectile_segment.end_position   = intersection;
+                    projectile_segment.platform       = nullptr; // arc segment
+                    projectile_segment.distance       = Vector2Distance(launch_position, intersection);
+                    trajectory_segments.push_back(projectile_segment);
+
+                    // Expose arc points for drawing
+                    projectile_trajectory_points = projectile_path;
+
+                    // Return the LANDING POINT only; caller will handle post-landing sliding
+                    return intersection;
+                }
+            }
+        }
+
+        // Also handle world bounds as a landing/finalization case
+        if (current_pos.y >= GetScreenHeight() - 10) {
+            Vector2 ground_collision = { current_pos.x, (float)GetScreenHeight() - 10 };
+            projectile_path.push_back(ground_collision);
+
+            TrajectorySegment projectile_segment;
+            projectile_segment.start_position = launch_position;
+            projectile_segment.end_position   = ground_collision;
+            projectile_segment.platform       = nullptr;
+            projectile_segment.distance       = Vector2Distance(launch_position, ground_collision);
+            trajectory_segments.push_back(projectile_segment);
+
+            projectile_trajectory_points = projectile_path;
+            return ground_collision;
+        }
+
+        if (current_pos.x < 0 || current_pos.x > GetScreenWidth()) {
+            // Off-screen horizontally — end arc at current_pos
+            projectile_path.push_back(current_pos);
+
+            TrajectorySegment projectile_segment;
+            projectile_segment.start_position = launch_position;
+            projectile_segment.end_position   = current_pos;
+            projectile_segment.platform       = nullptr;
+            projectile_segment.distance       = Vector2Distance(launch_position, current_pos);
+            trajectory_segments.push_back(projectile_segment);
+
+            projectile_trajectory_points = projectile_path;
+            return current_pos;
+        }
+
+        // Accumulate arc path and advance time
+        projectile_path.push_back(current_pos);
+        time += dt;
+    }
+
+    // Fallback: no hit within max_time — return last simulated pos
+    projectile_trajectory_points = projectile_path;
+    return current_pos;
 }
+
 
 // NEW: Calculate trajectory after landing on a platform
 Vector2 Box::CalculatePostLandingTrajectory(Vector2 landing_position, Vector2 landing_velocity, const Platform& landing_platform) {
