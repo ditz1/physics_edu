@@ -609,42 +609,70 @@ void Box::DrawMultiPlatformGhost(const std::vector<Platform>& platforms) {
     }
     
     // Draw reference frame boxes (every 2 platforms = 1 frame)
-    std::vector<const Platform*> sorted_platforms;
-    for (const auto& platform : platforms) {
-        sorted_platforms.push_back(&platform);
-    }
+    // std::vector<const Platform*> sorted_platforms;
+    // for (const auto& platform : platforms) {
+    //     sorted_platforms.push_back(&platform);
+    // }
     
-    std::sort(sorted_platforms.begin(), sorted_platforms.end(), 
-        [](const Platform* a, const Platform* b) {
-            float a_left = std::min(a->top_left.x, a->top_right.x);
-            float b_left = std::min(b->top_left.x, b->top_right.x);
-            return a_left < b_left;
-        });
+    // std::sort(sorted_platforms.begin(), sorted_platforms.end(), 
+    //     [](const Platform* a, const Platform* b) {
+    //         float a_left = std::min(a->top_left.x, a->top_right.x);
+    //         float b_left = std::min(b->top_left.x, b->top_right.x);
+    //         return a_left < b_left;
+    //     });
+
+        
     
-    // Draw reference frames
-    Color frame_colors[] = { PURPLE, MAGENTA, BLUE, DARKGREEN, ORANGE, PINK };
-    int num_colors = sizeof(frame_colors) / sizeof(frame_colors[0]);
+    // // Draw reference frames
+    // Color frame_colors[] = { PURPLE, MAGENTA, BLUE, DARKGREEN, ORANGE, PINK };
+    // int num_colors = sizeof(frame_colors) / sizeof(frame_colors[0]);
     
-    for (int frame = 0; frame * 2 + 1 < (int)sorted_platforms.size(); frame++) {
-        const Platform* slope_platform = sorted_platforms[frame * 2];
-        const Platform* horizontal_platform = sorted_platforms[frame * 2 + 1];
+    // for (int frame = 0; frame * 2 + 1 < (int)sorted_platforms.size(); frame++) {
+    //     const Platform* slope_platform = sorted_platforms[frame * 2];
+    //     const Platform* horizontal_platform = sorted_platforms[frame * 2 + 1];
         
-        Color frame_color = frame_colors[frame % num_colors];
+    //     Color frame_color = frame_colors[frame % num_colors];
         
-        // Calculate bounding box for this reference frame
-        float min_x = std::min({slope_platform->top_left.x, slope_platform->top_right.x, 
-        horizontal_platform->top_left.x, horizontal_platform->top_right.x}) - 20;
-        float max_x = std::max({slope_platform->top_left.x, slope_platform->top_right.x,
-                               horizontal_platform->top_left.x, horizontal_platform->top_right.x}) + 20;
-        float min_y = std::min({slope_platform->top_left.y, slope_platform->top_right.y,
-                               horizontal_platform->top_left.y, horizontal_platform->top_right.y}) - 50;
-        float max_y = std::max({slope_platform->top_left.y, slope_platform->top_right.y,
-                               horizontal_platform->top_left.y, horizontal_platform->top_right.y}) + 50;
+    //     // Calculate bounding box for this reference frame
+    //     float min_x = std::min({slope_platform->top_left.x, slope_platform->top_right.x, 
+    //     horizontal_platform->top_left.x, horizontal_platform->top_right.x}) - 20;
+    //     float max_x = std::max({slope_platform->top_left.x, slope_platform->top_right.x,
+    //                            horizontal_platform->top_left.x, horizontal_platform->top_right.x}) + 20;
+    //     float min_y = std::min({slope_platform->top_left.y, slope_platform->top_right.y,
+    //                            horizontal_platform->top_left.y, horizontal_platform->top_right.y}) - 50;
+    //     float max_y = std::max({slope_platform->top_left.y, slope_platform->top_right.y,
+    //                            horizontal_platform->top_left.y, horizontal_platform->top_right.y}) + 50;
         
-        // Draw reference frame boundary
-        DrawRectangleLines((int)min_x, (int)min_y, (int)(max_x - min_x), (int)(max_y - min_y), frame_color);
-        DrawText(TextFormat("Frame %d", frame + 1), (int)min_x, (int)min_y - 20, 16, frame_color);
-    }
+    //     // Draw reference frame boundary
+    //     DrawRectangleLines((int)min_x, (int)min_y, (int)(max_x - min_x), (int)(max_y - min_y), frame_color);
+    //     DrawText(TextFormat("Frame %d", frame + 1), (int)min_x, (int)min_y - 20, 16, frame_color);
+    // }
+    // Draw reference frames — ONE per platform (left->right)
+    // std::vector<const Platform*> sorted_platforms;
+    // sorted_platforms.reserve(platforms.size());
+    // for (const auto& p : platforms) sorted_platforms.push_back(&p);
+    // std::sort(sorted_platforms.begin(), sorted_platforms.end(),
+    //     [](const Platform* a, const Platform* b) {
+    //         float ax = std::min(a->top_left.x, a->top_right.x);
+    //         float bx = std::min(b->top_left.x, b->top_right.x);
+    //         if (ax == bx) return a->id < b->id;
+    //         return ax < bx;
+    //     });
+
+    // Color frame_colors[] = { PURPLE, MAGENTA, BLUE, DARKGREEN, ORANGE, PINK };
+    // int num_colors = (int)(sizeof(frame_colors) / sizeof(frame_colors[0]));
+
+    // for (size_t i = 0; i < sorted_platforms.size(); ++i) {
+    //     const Platform* p = sorted_platforms[i];
+    //     Color c = frame_colors[i % num_colors];
+
+    //     // Simple visual: line along the top surface for each platform/frame
+    //     DrawLineEx(p->top_left, p->top_right, 3.0f, c);
+
+    //     // (Optional) tiny label
+    //     // DrawText(TextFormat("F%zu", i+1), (int)((p->top_left.x + p->top_right.x)/2), (int)(std::min(p->top_left.y, p->top_right.y) - 14), 12, c);
+    // }
+
     
     // Draw all trajectory segments (rest of the function stays exactly the same)
     for (size_t i = 0; i < trajectory_segments.size(); i++) {
@@ -1087,13 +1115,90 @@ const Platform* Box::FindNextPlatformToRight(const Platform& current_platform, c
 // NEW REFERENCE FRAME-BASED TRAJECTORY CALCULATION
 // ================================
                         
-void Box::CalculateMultiReferenceFrameTrajectory(const std::vector<Platform>& platforms) {
-    // Build a robust forward-only (low->high id) trajectory that:
-    // - clamps each on-platform segment to the FIRST forward intersection with any higher-id platform
-    // - accounts for that lost distance in both drawing and kinematics
-    // - handles connected transitions vs projectile gaps
-    // - keeps everything aligned with your inelastic/friction-only formulas
+// === NEW: Analytic per-platform reference frame trajectory ===
+// Each platform is its own reference frame. Between platforms we either:
+//   (a) transfer at a shared endpoint (connected), or
+//   (b) follow a projectile arc to the first forward intersection.
+// Inelastic impacts: normal component is discarded; tangential component is preserved.
+// On-platform motion uses your friction-only kinematics:
+//   a_t = g*sin(theta) - mu*g*cos(theta), and v^2 = u^2 + 2 a s.
 
+namespace {
+    // Analytic intersection of projectile with a line segment.
+    // Projectile (downward +y gravity): p(t) = p0 + v0*t + 0.5*(0, g)*t^2
+    // Segment: l(s) = L0 + s*(L1-L0), 0<=s<=1
+    inline bool SolveProjectileSegmentIntersection(Vector2 p0, Vector2 v0, float g,
+                                                   Vector2 L0, Vector2 L1,
+                                                   float& t_hit, float& s_hit, Vector2& hit)
+    {
+        Vector2 U = { L1.x - L0.x, L1.y - L0.y };
+        if (fabsf(U.x) > 1e-6f) {
+            // Eliminate s via x
+            float A = 0.5f * g;
+            float B = (v0.y - (U.y / U.x) * v0.x);
+            float C = (p0.y - L0.y - (U.y / U.x) * (p0.x - L0.x));
+            float disc = B*B - 4*A*C;
+            if (disc < 0) return false;
+            float sqrt_disc = sqrtf(disc);
+            float t1 = (-B - sqrt_disc) / (2*A);
+            float t2 = (-B + sqrt_disc) / (2*A);
+            float tCandidate = 1e30f;
+            if (t1 > 1e-5f) tCandidate = t1;
+            if (t2 > 1e-5f && t2 < tCandidate) tCandidate = t2;
+            if (tCandidate == 1e30f) return false;
+            float x = p0.x + v0.x * tCandidate;
+            float s = (x - L0.x) / U.x;
+            if (s < -1e-4f || s > 1.0001f) return false;
+            t_hit = tCandidate; s_hit = s;
+            hit = { L0.x + s * U.x, L0.y + s * U.y };
+            return true;
+        } else if (fabsf(U.y) > 1e-6f) {
+            // Vertical-ish segment: eliminate s via y (allow small x error)
+            float A = 0.5f * g, B = v0.y;
+            auto smallest_positive_root = [&](float C)->float {
+                float disc = B*B - 4*A*C;
+                if (disc < 0) return 1e30f;
+                float sd = sqrtf(disc);
+                float r1 = (-B - sd)/(2*A), r2 = (-B + sd)/(2*A);
+                float t = 1e30f;
+                if (r1 > 1e-5f) t = r1;
+                if (r2 > 1e-5f && r2 < t) t = r2;
+                return t;
+            };
+            float C0 = (p0.y - L0.y);
+            float C1 = (p0.y - L1.y);
+            float tA = smallest_positive_root(C0);
+            float tB = smallest_positive_root(C1);
+            float tCandidate = std::min(tA, tB);
+            if (tCandidate == 1e30f) return false;
+            float y = p0.y + v0.y * tCandidate + 0.5f * g * tCandidate * tCandidate;
+            float s = (y - L0.y) / U.y;
+            float x = p0.x + v0.x * tCandidate;
+            if (s < -1e-4f || s > 1.0001f) return false;
+            if (fabsf((L0.x + s*U.x) - x) > 2.0f) return false;
+            t_hit = tCandidate; s_hit = s;
+            hit = { L0.x + s * U.x, L0.y + s * U.y };
+            return true;
+        }
+        return false;
+    }
+
+    inline Vector2 UnitTangent(const Platform& p) {
+        Vector2 t = Vector2Normalize(Vector2Subtract(p.top_right, p.top_left));
+        if (t.x < 0) t = Vector2Scale(t, -1.0f); // forward = to the right
+        return t;
+    }
+    inline float SignedDistanceAlong(const Platform& p, Vector2 a, Vector2 b) {
+        Vector2 t = UnitTangent(p);
+        return Vector2DotProduct(Vector2Subtract(b, a), t);
+    }
+    inline Vector2 MoveAlong(const Platform& p, Vector2 a, float s) {
+        Vector2 t = UnitTangent(p);
+        return Vector2Add(a, Vector2Scale(t, s));
+    }
+}
+
+void Box::CalculateMultiReferenceFrameTrajectory(const std::vector<Platform>& platforms) {
     trajectory_segments.clear();
     projectile_trajectory_points.clear();
     multi_platform_ghost_calculated = false;
@@ -1104,260 +1209,159 @@ void Box::CalculateMultiReferenceFrameTrajectory(const std::vector<Platform>& pl
         return;
     }
 
-    // Start from BOX bottom-right corner (your collision basis)
-    float ang = rotation * DEG2RAD;
-    float c = cosf(ang), s = sinf(ang);
-    Vector2 local_rb = { size.x * 0.5f, size.y * 0.5f };
-    Vector2 cur_pos = {
-        local_rb.x * c - local_rb.y * s + position.x,
-        local_rb.x * s + local_rb.y * c + position.y
+    // Sort platforms left->right (stable) so "forward" means increasing x
+    std::vector<const Platform*> sorted;
+    sorted.reserve(platforms.size());
+    for (auto& p : platforms) sorted.push_back(&p);
+    std::sort(sorted.begin(), sorted.end(), [](const Platform* a, const Platform* b){
+        float ax = std::min(a->top_left.x, a->top_right.x);
+        float bx = std::min(b->top_left.x, b->top_right.x);
+        if (ax == bx) return a->id < b->id;
+        return ax < bx;
+    });
+
+    // Find supporting platform at the start point
+    auto find_support = [&](Vector2 pt)->const Platform* {
+        const Platform* best = nullptr; float best_d = 1e30f;
+        for (const Platform* p : sorted) {
+            Vector2 a = p->top_left, b = p->top_right;
+            Vector2 ab = Vector2Subtract(b, a);
+            float L2 = ab.x*ab.x + ab.y*ab.y; if (L2 < 1e-4f) continue;
+            float t = Vector2DotProduct(Vector2Subtract(pt, a), ab) / L2;
+            t = std::clamp(t, 0.0f, 1.0f);
+            Vector2 closest = Vector2Add(a, Vector2Scale(ab, t));
+            float d = Vector2Distance(pt, closest);
+            if (d < best_d && d <= 24.0f) { best_d = d; best = p; }
+        }
+        return best;
     };
 
-    // Locate starting platform (prefer current_platform_id)
-    const Platform* cur_plat = nullptr;
-    if (current_platform_id >= 0 && current_platform_id < (int)platforms.size()) {
-        cur_plat = &platforms[current_platform_id];
-    } else {
-        for (const auto& p : platforms) {
-            if (IsPointOnPlatform(cur_pos, p)) { cur_plat = &p; break; }
-        }
-    }
+    Vector2 cur_pos  = has_prediction_start ? prediction_start_position : position;
+    const Platform* cur_plat = find_support(cur_pos);
     if (!cur_plat) {
         final_ghost_position = cur_pos;
         multi_platform_ghost_calculated = true;
         return;
     }
 
-    auto dir_of = [&](const Platform& P)->Vector2 { return GetPlatformDirection(P); }; // normalized
-    float cur_speed = fabsf(Vector2DotProduct(velocity, dir_of(*cur_plat)));
-    if (cur_speed < 0.001f) cur_speed = 5.0f; // tiny nudge to advance prediction
+    // Project current velocity onto platform tangent for initial speed
+    float cur_speed = fabsf(Vector2DotProduct(velocity, UnitTangent(*cur_plat)));
 
-    // Compute along-slope distance
-    auto slope_dist_AB = [&](Vector2 A, Vector2 B, const Platform& P)->float {
-        Vector2 d = Vector2Subtract(B, A);
-        Vector2 t = dir_of(P);
-        float proj = Vector2DotProduct(d, t);
-        return fabsf(proj);
-    };
+    int guard = 0;
+    while (cur_plat && guard++ < 64) {
+        // Choose forward end of current platform
+        Vector2 endA = cur_plat->top_left, endB = cur_plat->top_right;
+        Vector2 forward_end = (endA.x > endB.x) ? endA : endB;
+        if (UnitTangent(*cur_plat).x < 0) forward_end = (endA.x < endB.x) ? endA : endB;
 
-    // Find FIRST forward intersection point between the current platform's
-    // forward segment [cur_pos -> right_end] and ANY higher-id platform's top edge.
-    auto find_first_forward_intersection = [&](const Platform& cur, Vector2 from_pos, Vector2 right_end,
-                                               Vector2& out_hit)->bool {
-        Vector2 fwd = dir_of(cur);
-        if (fwd.x < 0) fwd = Vector2Scale(fwd, -1.0f); // enforce left->right measure
-
-        float max_along = slope_dist_AB(from_pos, right_end, cur);
-        float best_along = max_along + 1e6f;
-        bool found = false;
-
-        for (const auto& cand : platforms) {
-            if (cand.id <= cur.id) continue; // forward only
-            Vector2 hit;
-            if (CheckCollisionLines(from_pos, right_end, cand.top_left, cand.top_right, &hit)) {
-                // measure forward distance along current platform from 'from_pos'
-                float along = Vector2DotProduct(Vector2Subtract(hit, from_pos), fwd);
-                if (along > 1e-4f && along < best_along) {
-                    best_along = along;
-                    out_hit = hit;
-                    found = true;
-                }
-            }
-        }
-        return found;
-    };
-
-    // Connected "next" platform from a given point on the current platform
-    auto find_connected_next = [&](const Platform& cur, Vector2 from_point)->std::pair<const Platform*, Vector2> {
-        const Platform* best = nullptr;
-        Vector2 best_xfer = from_point;
-        float best_score = 1e30f;
-
-        Vector2 fwd = dir_of(cur);
-        if (fwd.x < 0) fwd = Vector2Scale(fwd, -1.0f);
-
-        for (const auto& cand : platforms) {
-            if (cand.id <= cur.id) continue; // forward only
-            Vector2 intersection;
-            bool intersects = CheckCollisionLines(cur.top_left, cur.top_right,
-                                                  cand.top_left, cand.top_right, &intersection);
-            float score = 1e30f;
-            Vector2 xfer_point = from_point;
-
-            if (intersects) {
-                // Only use intersections that are forward from 'from_point'
-                float along = Vector2DotProduct(Vector2Subtract(intersection, from_point), fwd);
-                if (along > -1e-4f) {
-                    score = along;
-                    xfer_point = intersection;
-                }
-            } else {
-                // endpoint proximity (treat as connected if very close)
-                Vector2 cur_right = GetRightEndOfPlatform(cur);
-                if (Vector2DotProduct(Vector2Subtract(cur_right, from_point), fwd) < -1e-4f) {
-                    // right end is behind from_point; skip proximity
-                } else {
-                    Vector2 cand_left = (cand.top_left.x < cand.top_right.x) ? cand.top_left : cand.top_right;
-                    float gap = Vector2Distance(cur_right, cand_left);
-                    if (gap < 20.0f) { // treat as directly connected
-                        score = Vector2DotProduct(Vector2Subtract(cur_right, from_point), fwd);
-                        xfer_point = cur_right;
+        // Find earlier "connected" intersection ahead along current platform
+        Vector2 clamped_end = forward_end;
+        const Platform* connected_next = nullptr;
+        for (const Platform* cand : sorted) {
+            if (cand == cur_plat) continue;
+            if (std::min(cand->top_left.x, cand->top_right.x) < std::min(cur_plat->top_left.x, cur_plat->top_right.x))
+                continue; // forward only
+            Vector2 inter;
+            if (CheckCollisionLines(cur_plat->top_left, cur_plat->top_right, cand->top_left, cand->top_right, &inter)) {
+                float ahead = SignedDistanceAlong(*cur_plat, cur_pos, inter);
+                if (ahead > 1e-4f) {
+                    float current_end_ahead = fabsf(SignedDistanceAlong(*cur_plat, cur_pos, clamped_end));
+                    if (ahead < current_end_ahead) {
+                        clamped_end = inter;
+                        connected_next = cand;
                     }
                 }
             }
-
-            if (score < best_score) {
-                best_score = score;
-                best = &cand;
-                best_xfer = xfer_point;
-            }
         }
 
-        if (best && best_score < 1e29f) return {best, best_xfer};
-        return {nullptr, from_point};
-    };
+        // Distances
+        float dist_to_clamped = fabsf(SignedDistanceAlong(*cur_plat, cur_pos, clamped_end));
+        float stop_dist       = CalculateStoppingDistanceOnPlatform(cur_speed, *cur_plat);
 
-    // Projectile sim (returns first landing on any higher-id platform)
-    auto simulate_projectile = [&](Vector2 launch_pos, Vector2 launch_vel, int current_id)
-        -> std::tuple<bool, Vector2, const Platform*, float> {
-        const float dt = 0.015f;
-        const float max_time = 10.0f;
-
-        Vector2 p = launch_pos;
-        Vector2 v = launch_vel;
-        projectile_trajectory_points.clear();
-        projectile_trajectory_points.push_back(p);
-
-        float arc_len = 0.0f;
-        for (float t = 0.0f; t < max_time; t += dt) {
-            Vector2 prev = p;
-
-            v.y += gravity * dt;
-            p = Vector2Add(p, Vector2Scale(v, dt));
-
-            // forward-only guard
-            if (p.x < prev.x) p.x = prev.x + 0.001f;
-
-            const Platform* best_plat = nullptr;
-            Vector2 best_hit; float best_d = 1e30f;
-
-            for (const auto& cand : platforms) {
-                if (cand.id <= current_id) continue;
-                Vector2 hit;
-                if (CheckCollisionLines(prev, p, cand.top_left, cand.top_right, &hit)) {
-                    if (prev.y <= hit.y && v.y > 0) {
-                        float d = Vector2Distance(prev, hit);
-                        if (d < best_d) { best_d = d; best_plat = &cand; best_hit = hit; }
-                    }
-                }
-            }
-
-            if (best_plat) {
-                arc_len += Vector2Distance(prev, best_hit);
-
-                TrajectorySegment arc;
-                arc.start_position = launch_pos;
-                arc.end_position   = best_hit;
-                arc.platform       = nullptr;
-                arc.distance       = arc_len;
-                trajectory_segments.push_back(arc);
-
-                projectile_trajectory_points.push_back(best_hit);
-
-                Vector2 tang = dir_of(*best_plat);
-                float speed_on_land = fabsf(Vector2DotProduct(v, tang));
-                return {true, best_hit, best_plat, speed_on_land};
-            }
-
-            arc_len += Vector2Distance(prev, p);
-            projectile_trajectory_points.push_back(p);
-
-            if (p.y > GetScreenHeight() + 200.0f || p.x > GetScreenWidth() + 200.0f) break;
-        }
-        return {false, p, (const Platform*)nullptr, 0.0f};
-    };
-
-    // MAIN traversal
-    int safety = 0;
-    while (cur_plat && safety++ < 64) {
-        Vector2 dir = dir_of(*cur_plat);
-        if (dir.x < 0) dir = Vector2Scale(dir, -1.0f); // enforce forward measure
-
-        Vector2 right_end = GetRightEndOfPlatform(*cur_plat);
-
-        // NEW: clamp end point to FIRST forward intersection (if any)
-        Vector2 clamped_end = right_end;
-        Vector2 hit_point;
-        if (find_first_forward_intersection(*cur_plat, cur_pos, right_end, hit_point)) {
-            clamped_end = hit_point;
-        }
-
-        float dist_to_end = slope_dist_AB(cur_pos, clamped_end, *cur_plat);
-
-        // Check if we stop before reaching the clamped end
-        float stop_dist = CalculateStoppingDistanceOnPlatform(cur_speed, *cur_plat);
-        if (stop_dist <= dist_to_end + 1e-6f) {
-            Vector2 stop_pos = Vector2Add(cur_pos, Vector2Scale(dir, stop_dist));
-
-            TrajectorySegment seg;
-            seg.start_position = cur_pos;
-            seg.end_position   = stop_pos;
-            seg.platform       = cur_plat;
-            seg.distance       = stop_dist;
-            trajectory_segments.push_back(seg);
-
+        // Case A: we stop on this platform before end
+        if (stop_dist <= dist_to_clamped + 1e-6f) {
+            Vector2 stop_pos = MoveAlong(*cur_plat, cur_pos, stop_dist);
+            trajectory_segments.push_back({cur_pos, stop_pos, cur_plat, stop_dist});
             final_ghost_position = stop_pos;
             multi_platform_ghost_calculated = true;
             return;
         }
 
-        // We reach clamped_end; compute exit speed for the TRAVELED distance
-        float exit_speed = CalculateFinalVelocity(cur_speed, *cur_plat, dist_to_end);
+        // We reach clamped_end with exit speed
+        float exit_speed = CalculateFinalVelocity(cur_speed, *cur_plat, dist_to_clamped);
+        trajectory_segments.push_back({cur_pos, clamped_end, cur_plat, dist_to_clamped});
 
-        // Record segment to clamped_end
-        {
-            TrajectorySegment seg;
-            seg.start_position = cur_pos;
-            seg.end_position   = clamped_end;
-            seg.platform       = cur_plat;
-            seg.distance       = dist_to_end;
-            trajectory_segments.push_back(seg);
-        }
-
-        cur_pos   = clamped_end;
-        cur_speed = exit_speed;
-
-        // Try a connected transition FROM clamped_end
-        auto [next_plat, xfer_pt] = find_connected_next(*cur_plat, clamped_end);
-        if (next_plat) {
-            cur_pos   = xfer_pt;           // usually equal to clamped_end if it was an intersection
-            cur_plat  = next_plat;
-            cur_speed = fabsf(cur_speed);  // carry tangential speed
+        // Case B1: connected next platform — instant transfer, keep tangential speed
+        if (connected_next) {
+            cur_pos   = clamped_end;
+            cur_plat  = connected_next;
+            cur_speed = exit_speed;
             continue;
         }
 
-        // No connection → projectile launch from clamped_end
-        Vector2 launch_vel = Vector2Scale(dir, cur_speed);
-        if (launch_vel.x < 0) launch_vel.x = 0.001f;
+        // Case B2: gap — projectile to first forward platform we hit (analytic)
+        Vector2 launch_pos = clamped_end;
+        Vector2 launch_vel = Vector2Scale(UnitTangent(*cur_plat), exit_speed);
 
-        auto [landed, land_pt, land_plat, land_speed] =
-            simulate_projectile(cur_pos, launch_vel, cur_plat->id);
+        float best_t = 1e30f; const Platform* best_plat = nullptr; Vector2 best_hit{}; float best_s = 0.0f;
+        for (const Platform* cand : sorted) {
+            if (cand == cur_plat) continue;
+            if (std::min(cand->top_left.x, cand->top_right.x) < std::min(cur_plat->top_left.x, cur_plat->top_right.x) - 1.0f)
+                continue;
+            float t_hit, s_hit; Vector2 hit;
+            if (SolveProjectileSegmentIntersection(launch_pos, launch_vel, gravity,
+                                                   cand->top_left, cand->top_right,
+                                                   t_hit, s_hit, hit)) {
+                if (t_hit > 1e-5f && t_hit < best_t && (hit.x >= launch_pos.x - 1e-3f)) {
+                    best_t = t_hit; best_plat = cand; best_hit = hit; best_s = s_hit;
+                }
+            }
+        }
 
-        if (!landed || !land_plat) {
-            final_ghost_position = land_pt; // flew off/ground
+        if (!best_plat) {
+            // No landing found: draw a short arc and finish
+            projectile_trajectory_points.clear();
+            Vector2 cur = launch_pos, v = launch_vel;
+            float dt = 0.02f, T = 0.6f;
+            projectile_trajectory_points.push_back(cur);
+            for (float tacc=0; tacc<T; tacc+=dt) {
+                v.y += gravity * dt;
+                cur = Vector2Add(cur, Vector2Scale(v, dt));
+                projectile_trajectory_points.push_back(cur);
+            }
+            final_ghost_position = cur;
             multi_platform_ghost_calculated = true;
             return;
         }
 
-        // Continue from landing
-        cur_pos   = land_pt;
-        cur_plat  = land_plat;
-        cur_speed = land_speed;
+        // Record a smooth arc for drawing
+        projectile_trajectory_points.clear();
+        int steps = 24;
+        for (int i=0; i<=steps; ++i) {
+            float t = best_t * (float(i)/steps);
+            Vector2 pt = {
+                launch_pos.x + launch_vel.x * t,
+                launch_pos.y + launch_vel.y * t + 0.5f * gravity * t * t
+            };
+            projectile_trajectory_points.push_back(pt);
+        }
+
+        // Inelastic landing: keep tangential component along the landing platform
+        Vector2 v_impact = { launch_vel.x, launch_vel.y + gravity * best_t };
+        Vector2 t_new = UnitTangent(*best_plat);
+        float speed_after = fabsf(Vector2DotProduct(v_impact, t_new));
+
+        // Continue on landing platform
+        cur_pos  = best_hit;
+        cur_plat = best_plat;
+        cur_speed = speed_after;
     }
 
+    // Safety
     final_ghost_position = cur_pos;
     multi_platform_ghost_calculated = true;
 }
+
 
 
 // NEW: Find connected platform groups
