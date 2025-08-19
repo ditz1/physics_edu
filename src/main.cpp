@@ -248,11 +248,18 @@ int main(int argc, char* argv[]) {
     // Level switching variables
     bool collision_with_gorilla = false;
     float level_switch_timer = 0.0f;
+
     const float LEVEL_SWITCH_DELAY = 3.0f;
     bool showing_success = false;
     bool loading_next_level = false;
     float loading_timer = 0.0f;
     const float LOADING_DURATION = 1.0f;
+
+    // --- App state for title / menus ---
+    enum class AppState { TITLE, LEVEL_SELECT, PLAYING };
+    AppState app_state = AppState::TITLE;
+    bool request_exit = false;
+
 
     // --- NEW: capture an optional startup config path, but DO NOT load yet ---
     const char* startup_config_path = nullptr;
@@ -316,13 +323,94 @@ int main(int argc, char* argv[]) {
         screenHeight = GetScreenHeight();
        dt = 1.0f / (30.0f * dt_modifier);
 
-        if (currentMusic) UpdateMusicStream(*currentMusic);
+                if (currentMusic) UpdateMusicStream(*currentMusic);
 
+        // --- TITLE SCREEN ---
+        if (app_state == AppState::TITLE) {
+            BeginDrawing();
+            // Background (use whichever tier is currently bound)
+            if (currentBackground) {
+                DrawTexture(*currentBackground, 0, 0, WHITE);
+            } else {
+                ClearBackground(BLACK);
+            }
+            // Dim overlay for readability
+            DrawRectangle(0, 0, GetScreenWidth(), GetScreenHeight(), (Color){0, 0, 0, 150});
+
+            // Title
+            const char* title = "Banana Slide";
+            int titleSize = 60;
+            int titleW = MeasureText(title, titleSize);
+            DrawText(title, GetScreenWidth()/2 - titleW/2, GetScreenHeight()/2 - 220, titleSize, RAYWHITE);
+
+            // Simple button helper
+            auto Button = [&](Rectangle r, const char* label) -> bool {
+                Vector2 m = GetMousePosition();
+                bool hover = CheckCollisionPointRec(m, r);
+                Color fill = hover ? BROWN : BEIGE;
+                DrawRectangleRounded(r, 0.2f, 8, fill);
+                DrawRectangleRoundedLines(r, 0.2f, 8, WHITE);
+                int fs = 28;
+                int tw = MeasureText(label, fs);
+                DrawText(label, (int)(r.x + (r.width - tw)/2), (int)(r.y + (r.height - fs)/2), fs, WHITE);
+                return hover && IsMouseButtonPressed(MOUSE_LEFT_BUTTON);
+            };
+
+            // Buttons layout
+            float bw = 300.0f, bh = 60.0f, gap = 20.0f;
+            float cx = GetScreenWidth()/2.0f - bw/2.0f;
+            float totalH = 3.0f*bh + 2.0f*gap;
+            float y0 = GetScreenHeight()/2.0f - totalH/2.0f;
+            Rectangle rStart  = { cx, y0,                 bw, bh };
+            Rectangle rSelect = { cx, y0 + bh + gap,      bw, bh };
+            Rectangle rQuit   = { cx, y0 + 2*(bh+gap),    bw, bh };
+
+            // Button actions
+            if (Button(rStart, "Start")) {
+                level_selector.selected_level = 1;
+                level_selector.selected_variant = 1;
+                if (level_selector.LoadSelectedLevel(all_platforms, box, gorilla)) {
+                    // Reset physics & level state (same as you do after ENTER in level selector)
+                    box.velocity = { 0.0f, 0.0f };
+                    box.acceleration = { 0.0f, 0.0f };
+                    box.ghost_calculated = false;
+                    box.multi_platform_ghost_calculated = false;
+                    box.has_prediction_start = false;
+                    box.is_colliding = false;
+
+                    collision_with_gorilla = false;
+                    showing_success = false;
+                    loading_next_level = false;
+                    level_switch_timer = 0.0f;
+                    loading_timer = 0.0f;
+
+                    SwitchBackground(CurrentTier());
+                    SwitchToTier(CurrentTier());
+
+                    app_state = AppState::PLAYING;
+                }
+            }
+
+            if (Button(rSelect, "Level Select")) {
+                level_selector.is_active = true;
+                app_state = AppState::LEVEL_SELECT;
+            }
+
+            if (Button(rQuit, "Quit")) {
+                request_exit = true;
+            }
+
+            EndDrawing();
+            if (request_exit) break;
+            continue; // skip the rest of the frame while on the title screen
+        }
 
        // Handle level selector
        if (IsKeyPressed(KEY_M)) {
            level_selector.is_active = !level_selector.is_active;
        }
+
+
 
        if (IsKeyPressed(KEY_K)) {
             level_selector.SaveCurrentLevel(all_platforms, box, gorilla);
@@ -345,29 +433,33 @@ int main(int argc, char* argv[]) {
            
            // Load selected level
            if (IsKeyPressed(KEY_ENTER)) {
-               if (level_selector.LoadSelectedLevel(all_platforms, box, gorilla)) {
-                   level_selector.is_active = false;
-                   
-                   // Reset physics state for both box and gorilla
-                   box.velocity = { 0.0f, 0.0f };
-                   box.acceleration = { 0.0f, 0.0f };
-                   box.ghost_calculated = false;
-                   box.multi_platform_ghost_calculated = false;
-                   box.has_prediction_start = false;
-                   box.is_colliding = false;
-                   
-                   // Reset level switching state
-                   collision_with_gorilla = false;
-                   showing_success = false;
-                   loading_next_level = false;
-                   level_switch_timer = 0.0f;
-                   loading_timer = 0.0f;
-                   SwitchBackground(CurrentTier());
-                   SwitchToTier(CurrentTier());
+            if (level_selector.LoadSelectedLevel(all_platforms, box, gorilla)) {
+                level_selector.is_active = false;
+                
+                // Reset physics state for both box and gorilla
+                box.velocity = { 0.0f, 0.0f };
+                box.acceleration = { 0.0f, 0.0f };
+                box.ghost_calculated = false;
+                box.multi_platform_ghost_calculated = false;
+                box.has_prediction_start = false;
+                box.is_colliding = false;
+                
+                // Reset level switching state
+                collision_with_gorilla = false;
+                showing_success = false;
+                loading_next_level = false;
+                level_switch_timer = 0.0f;
+                loading_timer = 0.0f;
+                SwitchBackground(CurrentTier());
+                SwitchToTier(CurrentTier());
 
-                   std::cout << "Level loaded successfully!" << std::endl;
-               }
-           }
+                // Enter gameplay after choosing a level
+                app_state = AppState::PLAYING;
+
+                std::cout << "Level loaded successfully!" << std::endl;
+            }
+        }
+
        }
 
        // assign platform textures
