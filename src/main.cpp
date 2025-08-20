@@ -6,6 +6,9 @@
 #include <cstring>
 #include <string>
 #include <cstdlib>
+#include <cstdio>   // snprintf for μ textbox
+#include <cmath>    // std::isfinite, fmodf
+
 
 #ifdef _WIN32
   // Strip Windows headers to avoid collisions with raylib:
@@ -364,6 +367,14 @@ int main(int argc, char* argv[]) {
         }
     }
 
+    // --- μ (friction) textbox state: Enter toggles editing, Enter again commits ---
+    bool mu_editing = false;
+    Rectangle mu_rect = { 10.0f, 300.0f, 160.0f, 28.0f };  // screen-space box
+    char mu_text_buf[32] = {0};
+    std::snprintf(mu_text_buf, sizeof(mu_text_buf), "%.3f", box.mu_kinetic);
+
+
+
     // If nothing was loaded, fall back to your default platforms (unchanged)
     if (!config_loaded) {
         std::cout << "Using default platform configuration" << std::endl;
@@ -483,6 +494,9 @@ int main(int argc, char* argv[]) {
             if (Button(rQuit, "Quit")) {
                 request_exit = true;
             }
+
+            
+
 
             EndDrawing();
             if (request_exit) break;
@@ -689,6 +703,51 @@ int main(int argc, char* argv[]) {
                dt_modifier -= 0.51f;
            }
 
+           // === μ textbox (Enter to edit / Enter to commit, Esc to cancel) ===
+            {
+                // Toggle editing on Enter; if already editing, Enter commits
+                if (IsKeyPressed(KEY_ENTER)) {
+                    if (!mu_editing) {
+                        mu_editing = true;
+                        std::snprintf(mu_text_buf, sizeof(mu_text_buf), "%.3f", box.mu_kinetic);
+                    } else {
+                        float v = strtof(mu_text_buf, nullptr);
+                        if (!std::isfinite(v) || v < 0.0f) v = 0.0f;   // clamp to [0, +inf)
+                        box.mu_kinetic = v;
+                        box.ghost_calculated = false;
+                        box.multi_platform_ghost_calculated = false;
+                        mu_editing = false;
+                    }
+                }
+            
+                // Cancel with Esc (revert buffer)
+                if (mu_editing && IsKeyPressed(KEY_ESCAPE)) {
+                    mu_editing = false;
+                    std::snprintf(mu_text_buf, sizeof(mu_text_buf), "%.3f", box.mu_kinetic);
+                }
+            
+                // While editing, accept digits and one decimal point; Backspace deletes
+                if (mu_editing) {
+                    int ch = GetCharPressed();
+                    while (ch > 0) {
+                        if ((ch >= '0' && ch <= '9') ||
+                            (ch == '.' && std::strchr(mu_text_buf, '.') == nullptr)) {
+                            size_t len = std::strlen(mu_text_buf);
+                            if (len < sizeof(mu_text_buf) - 1) {
+                                mu_text_buf[len]   = (char)ch;
+                                mu_text_buf[len+1] = '\0';
+                            }
+                        }
+                        ch = GetCharPressed();
+                    }
+                    if (IsKeyPressed(KEY_BACKSPACE)) {
+                        size_t len = std::strlen(mu_text_buf);
+                        if (len > 0) mu_text_buf[len - 1] = '\0';
+                    }
+                }
+            }
+
+
            if (IsKeyPressed(KEY_E)){
                edit_mode = !edit_mode;
            }
@@ -852,6 +911,28 @@ int main(int argc, char* argv[]) {
                                 10, y_offset + platform_count * 20, 14, WHITE);
                    }
                }
+
+               if (edit_mode) {
+                // Label
+                DrawText("μ (friction):", (int)mu_rect.x, (int)mu_rect.y - 20, 16, RAYWHITE);
+            
+                // Box
+                DrawRectangleRec(mu_rect, mu_editing ? (Color){50,50,50,200} : (Color){30,30,30,180});
+                DrawRectangleLinesEx(mu_rect, 2.0f, mu_editing ? YELLOW : GRAY);
+            
+                // Text
+                int fs = 18;
+                DrawText(mu_text_buf, (int)mu_rect.x + 8, (int)mu_rect.y + 6, fs, RAYWHITE);
+            
+                // Caret
+                if (mu_editing && fmodf((float)GetTime(), 1.0f) < 0.5f) {
+                    int tw = MeasureText(mu_text_buf, fs);
+                    int cx = (int)mu_rect.x + 8 + tw + 1;
+                    int cy = (int)mu_rect.y + 6;
+                    DrawLine(cx, cy, cx, cy + fs, RAYWHITE);
+                }
+            }
+            
                
                // Draw success message and countdown
                if (showing_success) {
