@@ -4,6 +4,8 @@
 #include "../include/gorilla.hpp"
 #include "../include/camera.hpp"
 #include <cstring>
+#include <string>
+#include <cstdlib>
 
 bool edit_mode = false;
 std::vector<Platform> all_platforms;
@@ -56,6 +58,57 @@ void DrawDebugInfo2(Spring spring, Spring spring2){
    float T = 2.0f * PI * sqrt(L / g);
    DrawText(TextFormat("%.2f = 2pi * sqrt(%.2f / %.2f)", T, L, g), x_start - 20, y_start + 80, 18, RAYWHITE);
 }
+
+// ── User display name helper (Windows + POSIX) ──────────────────────────────────
+
+#ifdef _WIN32
+  #ifndef NOMINMAX
+  #define NOMINMAX
+  #endif
+  #include <windows.h>
+  static std::string GetSystemUserDisplayName() {
+      WCHAR wbuf[256];
+      DWORD n = (DWORD)(sizeof(wbuf)/sizeof(wbuf[0]));
+      if (GetUserNameW(wbuf, &n)) {
+          int need = WideCharToMultiByte(CP_UTF8, 0, wbuf, -1, nullptr, 0, nullptr, nullptr);
+          if (need > 0) {
+              std::string out(need - 1, '\0');
+              WideCharToMultiByte(CP_UTF8, 0, wbuf, -1, out.data(), need, nullptr, nullptr);
+              if (!out.empty()) return out;
+          }
+      }
+      const char* u = std::getenv("USERNAME");
+      if (u && *u) return std::string(u);
+      return "Player";
+  }
+#else
+  #include <pwd.h>
+  #include <unistd.h>
+  static std::string GetSystemUserDisplayName() {
+      if (passwd* pw = getpwuid(geteuid())) {
+          // Prefer full name (GECOS) up to the first comma
+          if (pw->pw_gecos && pw->pw_gecos[0]) {
+              std::string full = pw->pw_gecos;
+              size_t c = full.find(',');
+              if (c != std::string::npos) full.resize(c);
+              // trim spaces
+              auto trim = [](std::string& s){
+                  size_t b = s.find_first_not_of(" \t");
+                  size_t e = s.find_last_not_of(" \t");
+                  if (b == std::string::npos) { s.clear(); return; }
+                  s = s.substr(b, e - b + 1);
+              };
+              trim(full);
+              if (!full.empty()) return full;
+          }
+          if (pw->pw_name && pw->pw_name[0]) return std::string(pw->pw_name);
+      }
+      const char* u = std::getenv("USER");
+      if (u && *u) return std::string(u);
+      return "Player";
+  }
+#endif
+
 
 // Replace your old signature:
 //   void LoadPlatformConfigurationFromFile(const char* filename, std::vector<Platform>& platforms)
@@ -260,6 +313,10 @@ int main(int argc, char* argv[]) {
     AppState app_state = AppState::TITLE;
     bool request_exit = false;
 
+    // Cached user name for the title screen
+    static std::string gUserDisplayName = GetSystemUserDisplayName();
+
+
 
     // --- NEW: capture an optional startup config path, but DO NOT load yet ---
     const char* startup_config_path = nullptr;
@@ -341,7 +398,19 @@ int main(int argc, char* argv[]) {
             const char* title = "Banana Slide";
             int titleSize = 60;
             int titleW = MeasureText(title, titleSize);
-            DrawText(title, GetScreenWidth()/2 - titleW/2, GetScreenHeight()/2 - 220, titleSize, RAYWHITE);
+            int titleX = GetScreenWidth()/2 - titleW/2;
+            int titleY = GetScreenHeight()/2 - 220;
+            DrawText(title, titleX, titleY, titleSize, RAYWHITE);
+
+            // Welcome, {user}
+            std::string welcome = std::string("Welcome, ") + gUserDisplayName;
+            int welcomeSize = 28;
+            int welcomeW = MeasureText(welcome.c_str(), welcomeSize);
+            DrawText(welcome.c_str(),
+         GetScreenWidth()/2 - welcomeW/2,
+         GetScreenHeight() - 200,   // a little below the main title
+         welcomeSize, RAYWHITE);
+
 
             // Simple button helper
             auto Button = [&](Rectangle r, const char* label) -> bool {
