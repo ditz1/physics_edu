@@ -7,6 +7,71 @@
 #include <string>
 #include <cstdlib>
 
+#ifdef _WIN32
+  // Strip Windows headers to avoid collisions with raylib:
+  // - NOUSER    → don’t include winuser.h (CloseWindow, ShowCursor, DrawText, etc.)
+  // - NOGDI     → don’t include wingdi.h (GDI Rectangle function)
+  // - NODRAWTEXT→ belt & suspenders for DrawText
+  // - WIN32_LEAN_AND_MEAN + NOMINMAX → reduce clutter / min/max macro
+  #ifndef WIN32_LEAN_AND_MEAN
+  #define WIN32_LEAN_AND_MEAN
+  #endif
+  #ifndef NOMINMAX
+  #define NOMINMAX
+  #endif
+  #ifndef NOUSER
+  #define NOUSER
+  #endif
+  #ifndef NOGDI
+  #define NOGDI
+  #endif
+  #ifndef NODRAWTEXT
+  #define NODRAWTEXT
+  #endif
+  #include <windows.h>
+
+  static std::string GetSystemUserDisplayName() {
+      WCHAR wbuf[256];
+      DWORD n = (DWORD)(sizeof(wbuf)/sizeof(wbuf[0]));
+      if (GetUserNameW(wbuf, &n)) {
+          int need = WideCharToMultiByte(CP_UTF8, 0, wbuf, -1, nullptr, 0, nullptr, nullptr);
+          if (need > 0) {
+              std::string out(need - 1, '\0');
+              WideCharToMultiByte(CP_UTF8, 0, wbuf, -1, out.data(), need, nullptr, nullptr);
+              if (!out.empty()) return out;
+          }
+      }
+      const char* u = std::getenv("USERNAME");
+      if (u && *u) return std::string(u);
+      return "Player";
+  }
+#else
+  #include <pwd.h>
+  #include <unistd.h>
+  static std::string GetSystemUserDisplayName() {
+      if (passwd* pw = getpwuid(geteuid())) {
+          if (pw->pw_gecos && pw->pw_gecos[0]) {
+              std::string full = pw->pw_gecos;
+              size_t c = full.find(',');
+              if (c != std::string::npos) full.resize(c);
+              auto trim = [](std::string& s){
+                  size_t b = s.find_first_not_of(" \t");
+                  size_t e = s.find_last_not_of(" \t");
+                  if (b == std::string::npos) { s.clear(); return; }
+                  s = s.substr(b, e - b + 1);
+              };
+              trim(full);
+              if (!full.empty()) return full;
+          }
+          if (pw->pw_name && pw->pw_name[0]) return std::string(pw->pw_name);
+      }
+      const char* u = std::getenv("USER");
+      if (u && *u) return std::string(u);
+      return "Player";
+  }
+#endif
+
+
 bool edit_mode = false;
 std::vector<Platform> all_platforms;
 
@@ -58,56 +123,6 @@ void DrawDebugInfo2(Spring spring, Spring spring2){
    float T = 2.0f * PI * sqrt(L / g);
    DrawText(TextFormat("%.2f = 2pi * sqrt(%.2f / %.2f)", T, L, g), x_start - 20, y_start + 80, 18, RAYWHITE);
 }
-
-// ── User display name helper (Windows + POSIX) ──────────────────────────────────
-
-#ifdef _WIN32
-  #ifndef NOMINMAX
-  #define NOMINMAX
-  #endif
-  #include <windows.h>
-  static std::string GetSystemUserDisplayName() {
-      WCHAR wbuf[256];
-      DWORD n = (DWORD)(sizeof(wbuf)/sizeof(wbuf[0]));
-      if (GetUserNameW(wbuf, &n)) {
-          int need = WideCharToMultiByte(CP_UTF8, 0, wbuf, -1, nullptr, 0, nullptr, nullptr);
-          if (need > 0) {
-              std::string out(need - 1, '\0');
-              WideCharToMultiByte(CP_UTF8, 0, wbuf, -1, out.data(), need, nullptr, nullptr);
-              if (!out.empty()) return out;
-          }
-      }
-      const char* u = std::getenv("USERNAME");
-      if (u && *u) return std::string(u);
-      return "Player";
-  }
-#else
-  #include <pwd.h>
-  #include <unistd.h>
-  static std::string GetSystemUserDisplayName() {
-      if (passwd* pw = getpwuid(geteuid())) {
-          // Prefer full name (GECOS) up to the first comma
-          if (pw->pw_gecos && pw->pw_gecos[0]) {
-              std::string full = pw->pw_gecos;
-              size_t c = full.find(',');
-              if (c != std::string::npos) full.resize(c);
-              // trim spaces
-              auto trim = [](std::string& s){
-                  size_t b = s.find_first_not_of(" \t");
-                  size_t e = s.find_last_not_of(" \t");
-                  if (b == std::string::npos) { s.clear(); return; }
-                  s = s.substr(b, e - b + 1);
-              };
-              trim(full);
-              if (!full.empty()) return full;
-          }
-          if (pw->pw_name && pw->pw_name[0]) return std::string(pw->pw_name);
-      }
-      const char* u = std::getenv("USER");
-      if (u && *u) return std::string(u);
-      return "Player";
-  }
-#endif
 
 
 // Replace your old signature:
