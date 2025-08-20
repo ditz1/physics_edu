@@ -5,6 +5,20 @@
 #include <limits>
 #include <vector>
 #include <set>
+#include <cstdio>
+
+// ---- DEBUG LOGGING ----
+#ifndef PHYSICS_DEBUG
+#define PHYSICS_DEBUG 1
+#endif
+#if PHYSICS_DEBUG
+#else
+#endif
+
+static inline float EnergyPerMass(const Vector2& v, float y, float g) {
+    return 0.5f*(v.x*v.x + v.y*v.y) + g*y;  // (1/2)|v|^2 + g*y   (raylib Y+ is downward!)
+}
+
 
 static int font_size_for_dist = 18;
 
@@ -138,41 +152,37 @@ void Box::Update(float dt, const std::vector<Platform>& platforms) {
     // Store the previous collision state
     was_colliding_last_frame = is_colliding;
     last_dt = dt;
-    
+    Vector2 v_old = velocity;
+
     if (!is_colliding) {
-        // Simple gravity when not colliding - acceleration = 9.81 m/s²
+        // projectile: a = (0, g)
         velocity.y += gravity * dt;
     } else {
-        // SIMPLE KINEMATICS when colliding with platform
         float slope_angle = rotation * DEG2RAD;
-        
-        // Get the slope direction vector
-        Vector2 slope_direction = { cos(slope_angle), sin(slope_angle) };
-        
-        // Project current velocity onto the slope to get speed along slope
+        Vector2 slope_direction = { cosf(slope_angle), sinf(slope_angle) };
+
+        // accelerate along slope: a = g*sin(theta)
         float current_speed_along_slope = Vector2DotProduct(velocity, slope_direction);
-        
-        // Apply constant acceleration along slope: a = g * sin(θ)
-        float slope_acceleration = gravity * sin(slope_angle);
+        float slope_acceleration = gravity * sinf(slope_angle);
         float new_speed_along_slope = current_speed_along_slope + slope_acceleration * dt;
-        
-        // Set velocity to be exactly along the slope direction with the new speed
+
         velocity = Vector2Scale(slope_direction, new_speed_along_slope);
     }
-    
+
+    // friction (unchanged logic)
     // Apply simple friction
-    ApplyFriction(dt);
+ApplyFriction(dt);
 
-    // Ensure left-to-right movement as per the rules
-    if (is_colliding && velocity.x < 0) {
-        velocity.x = 0; // Stop leftward movement
-    }
+// Kinematic/trapezoidal position update matches s = v0*t + 0.5*a*t^2
+Vector2 v_avg = { 0.5f*(v_old.x + velocity.x), 0.5f*(v_old.y + velocity.y) };
+position = Vector2Add(position, Vector2Scale(v_avg, dt));
 
-    // REMOVE the "stuck" push logic - it causes twitching when box should be at rest
-    // Box should naturally come to rest due to friction, not artificial pushes
+     (int)is_colliding, current_platform_id, rotation,
+     position.x, position.y, velocity.x, velocity.y,
+     EnergyPerMass(velocity, position.y, gravity);
 
-    position = Vector2Add(position, Vector2Scale(velocity, dt));
 }
+
 
 void Box::Draw() {
     const float border = 0.2f;
@@ -234,7 +244,7 @@ void Box::Draw() {
     DrawRectangleLinesEx(outline, border, BLACK);
 
     // Debug center marker
-    // DrawCircleV(position, 5, WHITE);
+    DrawCircleV(position, 5, PINK);
 }
 
 
@@ -301,29 +311,47 @@ void Box::CheckPlatformCollisionTwoLine(const std::vector<Platform>& platforms) 
             Vector2 closestPointOnPlatform = Vector2Add(platform.top_left, Vector2Scale(normalizedDir, t * platformLength));
             
             // Calculate distance from box bottom to platform surface
-            float distance = Vector2Distance(boxBottom, closestPointOnPlatform);
-            
-            // Check if box is above the platform and close enough to magnetize
-            if (boxBottom.y >= closestPointOnPlatform.y - 5.0f && distance < 10.0f) {
-                // PRIORITIZATION FIX: If box is moving rightward, prefer platforms to the right
+            // Signed normal test to the *line*, not just Euclidean/vertical distance
+            Vector2 A = platform.top_left, B = platform.top_right;
+            Vector2 t_dir = Vector2Normalize(Vector2Subtract(B, A));          // tangent
+            Vector2 n = (Vector2){ -t_dir.y, t_dir.x };                       // one normal
+
+            // Make n point roughly upward (screen Y+ is down)
+            if (n.y > 0.0f) n = (Vector2){ -n.x, -n.y };
+
+            // Unclamped point on infinite line
+            float t_un = Vector2DotProduct(Vector2Subtract(boxBottom, A), t_dir) / platformLength;
+            Vector2 point_on_line = Vector2Add(A, Vector2Scale(t_dir, t_un * platformLength));
+
+            // Signed gap along the normal: >0 means above the surface
+            float normal_gap = Vector2DotProduct(Vector2Subtract(boxBottom, point_on_line), n);
+            float abs_n_gap  = fabsf(normal_gap);
+
+            // Gating
+            constexpr float TOUCH_EPS = 1.0f;     // closeness in normal direction
+            constexpr float END_EPS_T  = 0.02f;   // ignore ~2% near endpoints when not already colliding
+            bool within_segment = (t_un >= -0.01f && t_un <= 1.01f);
+            bool interior       = (t_un >= END_EPS_T && t_un <= (1.0f - END_EPS_T));
+            bool approaching    = (Vector2DotProduct(velocity, n) < 0.0f) || was_colliding_last_frame;
+
+            // Only consider candidates when close in the NORMAL direction and either:
+            // - already colliding, or
+            // - approaching from above and the hit is interior
+            if (abs_n_gap <= TOUCH_EPS && within_segment && (is_colliding || (interior && approaching))) {
                 bool is_preferred = true;
                 if (velocity.x > 0.1f && is_colliding && current_platform_id >= 0 && current_platform_id < (int)platforms.size()) {
-                    // Check if this platform is in the direction of movement
                     Vector2 platform_center = Vector2Add(platform.top_left, Vector2Scale(platformDir, 0.5f));
-                    if (platform_center.x < position.x - 10.0f) {
-                        // This platform is behind the box - deprioritize it
-                        is_preferred = false;
-                    }
+                    if (platform_center.x < position.x - 10.0f) is_preferred = false;
                 }
-                
-                float effective_distance = is_preferred ? distance : distance + 5.0f; // Add penalty for non-preferred
-                
+                float effective_distance = is_preferred ? abs_n_gap : (abs_n_gap + 5.0f);
                 if (effective_distance < closest_distance) {
-                    closest_distance = effective_distance;
-                    closest_platform_id = (int)i;  // Cast to int for consistency
-                    closest_point = closestPointOnPlatform;
+                    closest_distance    = effective_distance;
+                    closest_platform_id = (int)i;
+                    // Use the *clamped* closest point for the final snap
+                    closest_point       = closestPointOnPlatform;
                 }
             }
+
         }
     }
     
@@ -342,29 +370,50 @@ void Box::CheckPlatformCollisionTwoLine(const std::vector<Platform>& platforms) 
         // Get the platform we're colliding with
         const Platform& platform = platforms[closest_platform_id];
         rotation = platform.rotation;
-        
-        // MAGNETIZE the box to be exactly on the platform surface
-        float distanceToMove = boxBottom.y - closest_point.y;
-        position.y -= distanceToMove; // Always snap to surface, regardless of direction
-        
-        // Handle velocity
+
+        // --- Snap bottom-center exactly to the surface (full vector) ---
+        Vector2 boxBottomNow = { position.x, position.y + size.y * 0.5f };
+        Vector2 delta = Vector2Subtract(boxBottomNow, closest_point);
+
+        // Energy *before* snap (use pre-change state)
+        float E_pre = EnergyPerMass(velocity, position.y, gravity);
+
+        // Move the center by the same delta so bottom-center sits on surface
+        position = Vector2Subtract(position, delta);
+
+        // Build slope tangent
+        float slope_ang = platform.rotation * DEG2RAD;
+        Vector2 t_dir = { cosf(slope_ang), sinf(slope_ang) };
+
+        // --- Landing / transition response ---
         if (isPlatformTransition) {
-            // Connected platform: keep speed magnitude (matches ghost)
-            float new_slope_angle = platform.rotation * DEG2RAD;
-            Vector2 new_slope_direction = {cosf(new_slope_angle), sinf(new_slope_angle)};
-            velocity = Vector2Scale(new_slope_direction, old_speed);
+            // Reorient along new tangent, preserve old speed magnitude (this was already your intent)
+            float speed = Vector2Length(velocity);
+            float sign  = (Vector2DotProduct(velocity, t_dir) >= 0.0f) ? 1.0f : -1.0f;
+            velocity = Vector2Scale(t_dir, speed * sign);
         } else if (isNewCollision) {
-            // Landing from projectile: keep ONLY tangential component; discard normal
-            float slope_angle = platform.rotation * DEG2RAD;
-            Vector2 slope_direction = {cosf(slope_angle), sinf(slope_angle)};
+            // 1) PROJECT to the slope (no “free” tangential speed)
+            float v_tan = Vector2DotProduct(velocity, t_dir); // signed
+            float s     = fabsf(v_tan);
+            float s2    = s*s;
         
-            float v_tan = Vector2DotProduct(velocity, slope_direction);   // projection
-            velocity = Vector2Scale(slope_direction, v_tan);
+            // 2) COMPENSATE for snap vertical work: ΔU = g * Δy   (raylib: y+ is downward)
+            // We moved the center by (-delta); if delta.y > 0, we snapped UP → potential increased → reduce kinetic.
+            float s2_after = s2 - 2.0f * gravity * delta.y;
+            if (s2_after < 0.0f) s2_after = 0.0f;
+        
+            float s_after = sqrtf(s2_after);
+            float sign    = (v_tan >= 0.0f) ? 1.0f : -1.0f;
+            velocity = Vector2Scale(t_dir, s_after * sign);
         
             if (!has_prediction_start) {
                 SetPredictionStartPosition();
             }
         }
+
+        // Energy *after* snap/response
+        float E_post = EnergyPerMass(velocity, position.y, gravity);
+        
 
     } else {
         // No collision
@@ -419,7 +468,7 @@ bool Box::CheckAndHandleTransition(const std::vector<Platform>& platforms) {
         Vector2 next_left = (next->top_left.x < next->top_right.x) ? next->top_left : next->top_right;
         float gap = Vector2Distance(right_end, next_left);
 
-        if (connected || gap < 10.0f) {
+        if (connected || gap < 1.0f) {
             // TELEPORT / DIRECT TRANSITION: place bottom-center on the transition point
             Vector2 T = connected ? intersection : right_end;
             Vector2 new_center = { T.x, T.y - size.y * 0.5f };
@@ -724,20 +773,23 @@ void Box::DrawGhost(const Platform& slope_platform, const Platform& horizontal_p
     DrawCircleV(prediction_start_position, 4, PURPLE);
     
     // Draw ghost box at calculated position
-    float border = 2.0f;
+    // Draw ghost box at calculated position
+    const float border = 2.0f;
     DrawRectanglePro(
-        (Rectangle){ ghost_position_stored.x, ghost_position_stored.y, size.x, size.y }, 
-        (Vector2){ size.x * 0.5f, size.y * 0.5f }, 
+        (Rectangle){ ghost_position_stored.x, ghost_position_stored.y, size.x, size.y },
+        (Vector2){ size.x * 0.5f, size.y * 0.5f },
         0.0f,
         (Color){255, 255, 255, 100}
     );
-    
     DrawRectanglePro(
-        (Rectangle){ ghost_position_stored.x, ghost_position_stored.y, size.x - border * 2, size.y - border * 2 }, 
-        (Vector2){ (size.x - border * 2) * 0.5f, (size.y - border * 2) * 0.5f }, 
+        (Rectangle){ ghost_position_stored.x, ghost_position_stored.y, size.x - border * 2, size.y - border * 2 },
+        (Vector2){ (size.x - border * 2) * 0.5f, (size.y - border * 2) * 0.5f },
         0.0f,
         (Color){color.r, color.g, color.b, 80}
     );
+
+
+
     
     // Show debug info
     Vector2 text_pos = {ghost_position_stored.x - 50, ghost_position_stored.y - 40};

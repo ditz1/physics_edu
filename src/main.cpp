@@ -707,7 +707,7 @@ int main(int argc, char* argv[]) {
            }
 
            // Check collision between box and gorilla
-           if (gorilla.CheckCollisionWithBox(box) && !collision_with_gorilla) {
+           if (gorilla.CheckCollisionWithBox(box) && !collision_with_gorilla && box.velocity.x < 0.3f) {
                collision_with_gorilla = true;
                showing_success = true;
                level_switch_timer = LEVEL_SWITCH_DELAY;
