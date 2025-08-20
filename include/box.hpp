@@ -35,6 +35,7 @@ public:
     float distance_traveled = 0.0f;
     Texture2D* texture;
     Vector2 origin_position = {0.0f, 0.0f};
+    float last_dt = 1.0f / 30.0f;
 
     std::vector<TrajectorySegment> trajectory_segments;
     Vector2 final_ghost_position;

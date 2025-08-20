@@ -137,7 +137,8 @@ static void DrawGapDimensions(Vector2 launch, Vector2 land) {
 void Box::Update(float dt, const std::vector<Platform>& platforms) {
     // Store the previous collision state
     was_colliding_last_frame = is_colliding;
-
+    last_dt = dt;
+    
     if (!is_colliding) {
         // Simple gravity when not colliding - acceleration = 9.81 m/s²
         velocity.y += gravity * dt;
@@ -348,22 +349,23 @@ void Box::CheckPlatformCollisionTwoLine(const std::vector<Platform>& platforms) 
         
         // Handle velocity
         if (isPlatformTransition) {
-            // Simple transition: just follow the new platform direction
+            // Connected platform: keep speed magnitude (matches ghost)
             float new_slope_angle = platform.rotation * DEG2RAD;
-            Vector2 new_slope_direction = {cos(new_slope_angle), sin(new_slope_angle)};
+            Vector2 new_slope_direction = {cosf(new_slope_angle), sinf(new_slope_angle)};
             velocity = Vector2Scale(new_slope_direction, old_speed);
         } else if (isNewCollision) {
-            // For new collisions, redirect velocity along platform
+            // Landing from projectile: keep ONLY tangential component; discard normal
             float slope_angle = platform.rotation * DEG2RAD;
-            Vector2 slope_direction = {cos(slope_angle), sin(slope_angle)};
-            float speed_along_slope = Vector2DotProduct(velocity, slope_direction);
-            velocity = Vector2Scale(slope_direction, fabs(speed_along_slope));
-            
-            // Set prediction start position when box first lands on a platform
+            Vector2 slope_direction = {cosf(slope_angle), sinf(slope_angle)};
+        
+            float v_tan = Vector2DotProduct(velocity, slope_direction);   // projection
+            velocity = Vector2Scale(slope_direction, v_tan);
+        
             if (!has_prediction_start) {
                 SetPredictionStartPosition();
             }
         }
+
     } else {
         // No collision
         if (was_colliding_last_frame) {
@@ -373,105 +375,82 @@ void Box::CheckPlatformCollisionTwoLine(const std::vector<Platform>& platforms) 
 }
 
 bool Box::CheckAndHandleTransition(const std::vector<Platform>& platforms) {
-    if (!is_colliding || current_platform_id < 0 || current_platform_id >= platforms.size()) {
-        return false;
-    }
-    
-    const Platform& current_platform = platforms[current_platform_id];
-    
-    // Calculate the RIGHT BOTTOM CORNER of the box
-    float box_rotation_rad = rotation * DEG2RAD;
-    float cos_rot = cosf(box_rotation_rad);
-    float sin_rot = sinf(box_rotation_rad);
-    
-    // Local coordinates of right bottom corner
-    Vector2 local_right_bottom = { size.x * 0.5f, size.y * 0.5f };
-    
-    // Rotate and translate to world coordinates
-    Vector2 box_right_corner = {
-        local_right_bottom.x * cos_rot - local_right_bottom.y * sin_rot + position.x,
-        local_right_bottom.x * sin_rot + local_right_bottom.y * cos_rot + position.y
-    };
-    
-    // Check if the right corner is near the transition point
-    Vector2 current_right_end = GetRightEndOfPlatform(current_platform);
-    float distance_to_right_end = Vector2Distance(box_right_corner, current_right_end);
-    
-    // Threshold for transition detection
-    float transition_threshold = 20.0f;
-    
-    if (distance_to_right_end < transition_threshold && velocity.x > 0) {
-        // IMPROVED PROJECTILE DETECTION: Check if there's a next platform the box could reach
-        const Platform* next_platform = FindNextPlatformToRight(current_platform, platforms);
-        
-        if (next_platform) {
-            // Check if platforms are connected (intersection or very close)
-            Vector2 intersection;
-            bool platforms_connected = CheckCollisionLines(
-                current_platform.top_left, current_platform.top_right,
-                next_platform->top_left, next_platform->top_right, &intersection
-            );
-            
-            // Also check proximity between platform endpoints
-            Vector2 current_right_end_pos = GetRightEndOfPlatform(current_platform);
-            Vector2 next_left_end = (next_platform->top_left.x < next_platform->top_right.x) ? 
-                                   next_platform->top_left : next_platform->top_right;
-            float gap_distance = Vector2Distance(current_right_end_pos, next_left_end);
-            
-            if (platforms_connected || gap_distance < 10.0f) {
-                // Platforms are connected - use teleport transition
-                Vector2 transition_point = platforms_connected ? intersection : current_right_end_pos;
-                
-                // Calculate where box should be positioned on the next platform
-                Vector2 new_position = transition_point;
-                new_position.y -= size.y * 0.5f; // Place box on platform surface
-                
-                // Store current speed for velocity preservation
-                float current_speed = Vector2Length(velocity);
-                
-                // TELEPORT: Set new position and platform
-                position = new_position;
-                last_platform_id = current_platform_id;
-                current_platform_id = -1; // Will be set by collision detection
-                
-                // Calculate new velocity direction along next platform
-                float next_slope_angle = next_platform->rotation * DEG2RAD;
-                Vector2 next_slope_direction = { cos(next_slope_angle), sin(next_slope_angle) };
-                
-                // Preserve speed, redirect along new platform
-                velocity = Vector2Scale(next_slope_direction, current_speed);
-                rotation = next_platform->rotation;
-                
-                return true; // Transition handled
-            } else {
-                // PROJECTILE MOTION: Platforms are not connected, box needs to jump/fall
-                // Calculate launch velocity from current platform
-                float slope_angle = current_platform.rotation * DEG2RAD;
-                Vector2 slope_direction = { cos(slope_angle), sin(slope_angle) };
-                float current_speed = Vector2Length(velocity);
-                Vector2 launch_velocity = Vector2Scale(slope_direction, current_speed);
-                
-                // Box launches from end of current platform
-                is_colliding = false;
-                current_platform_id = -1;
-                velocity = launch_velocity; // Set projectile velocity
-                
-                std::cout << "Box launching from platform " << current_platform.id << " to platform " << next_platform->id 
-                          << " with velocity: (" << launch_velocity.x << ", " << launch_velocity.y << ")" << std::endl;
-                return true; // Transition handled by launching
-            }
-        } else {
-            // No next platform found - box falls off the end
+    if (!is_colliding || current_platform_id < 0 || current_platform_id >= (int)platforms.size()) return false;
+
+    const Platform& cur = platforms[current_platform_id];
+
+    // Bottom-center point of the box (treat the box as a particle on the surface)
+    float ang = rotation * DEG2RAD;
+    float c = cosf(ang), s = sinf(ang);
+    Vector2 local_bottom_center = { 0.0f, size.y * 0.5f };
+    Vector2 P = { local_bottom_center.x * c - local_bottom_center.y * s + position.x,
+                  local_bottom_center.x * s + local_bottom_center.y * c + position.y };
+
+    // Parametric progress s along the current platform top edge
+    Vector2 A = cur.top_left, B = cur.top_right;
+    Vector2 E = Vector2Subtract(B, A);
+    float L = sqrtf(E.x*E.x + E.y*E.y);
+    if (L <= 0.0f) return false;
+
+    Vector2 u = { E.x / L, E.y / L };                 // unit tangent
+    Vector2 rel = Vector2Subtract(P, A);
+    float s_param = rel.x * u.x + rel.y * u.y;        // arc-length coordinate along edge
+
+    // Are we moving toward the right end?
+    float v_tan = velocity.x * u.x + velocity.y * u.y;
+    constexpr float TOUCH_EPS = 1.0f;                 // exact visual “touching”
+
+    if (v_tan >= 0.0f && s_param >= L - TOUCH_EPS) {
+        // Find next platform to the right (your existing helper)
+        const Platform* next = FindNextPlatformToRight(cur, platforms);
+
+        if (!next) { // fall off
             is_colliding = false;
             current_platform_id = -1;
-            
-            std::cout << "Box falling off end of platform " << current_platform.id << " - no next platform found" << std::endl;
-            return true; // Let box continue in projectile motion
+            return true;
+        }
+
+        // Connected or small gap? Transition vs projectile
+        Vector2 intersection;
+        bool connected = CheckCollisionLines(cur.top_left, cur.top_right,
+                                             next->top_left, next->top_right, &intersection);
+
+        Vector2 right_end = (Vector2){ B.x, B.y };
+        Vector2 next_left = (next->top_left.x < next->top_right.x) ? next->top_left : next->top_right;
+        float gap = Vector2Distance(right_end, next_left);
+
+        if (connected || gap < 10.0f) {
+            // TELEPORT / DIRECT TRANSITION: place bottom-center on the transition point
+            Vector2 T = connected ? intersection : right_end;
+            Vector2 new_center = { T.x, T.y - size.y * 0.5f };
+
+            float speed = Vector2Length(velocity);
+            float n_ang = next->rotation * DEG2RAD;
+            Vector2 n_dir = { cosf(n_ang), sinf(n_ang) };
+
+            position = new_center;
+            velocity = Vector2Scale(n_dir, speed);  // preserve speed (elastic)
+            rotation = next->rotation;
+            current_platform_id = next->id;
+            is_colliding = true;
+            return true;
+        } else {
+            // PROJECTILE: leave tangent to current slope with current speed
+            float ang_s = cur.rotation * DEG2RAD;
+            Vector2 t_dir = { cosf(ang_s), sinf(ang_s) };
+            float speed = Vector2Length(velocity);
+
+            velocity = Vector2Scale(t_dir, speed);
+            is_colliding = false;
+            current_platform_id = -1;
+            return true;
         }
     }
-    
-    return false; // No transition needed
+
+    return false;
 }
+
+
 
 void Box::ApplyFriction(float dt) {
     if (is_colliding) {
@@ -576,18 +555,23 @@ void Box::SetPredictionStartPosition() {
     }
     
     // Calculate the BOTTOM RIGHT CORNER of the rotated box
+    // Calculate the BOTTOM CENTER of the rotated box
     float box_angle = rotation * DEG2RAD;
     float cos_rot = cosf(box_angle);
     float sin_rot = sinf(box_angle);
-    
-    // Local coordinates of bottom right corner (relative to box center)
-    Vector2 local_bottom_right = { size.x * 0.5f, size.y * 0.5f };
-    
+
+    // Local coordinates of bottom center (relative to box center)
+    Vector2 local_bottom_center = { 0.0f, size.y * 0.5f };
+
     // Rotate and translate to world coordinates
     prediction_start_position = {
-        local_bottom_right.x * cos_rot - local_bottom_right.y * sin_rot + position.x,
-        local_bottom_right.x * sin_rot + local_bottom_right.y * cos_rot + position.y
+        local_bottom_center.x * cos_rot - local_bottom_center.y * sin_rot + position.x,
+        local_bottom_center.x * sin_rot + local_bottom_center.y * cos_rot + position.y
     };
+
+    // move prediction point up slightly (screen Y grows downward, so subtract to move up)
+    //prediction_start_position.y -= 1.0f;
+
 
     // move prediction point up slightly
     
@@ -650,7 +634,13 @@ void Box::CalculateGhostTrajectory(const std::vector<Platform>& platforms) {
         transition_point_stored = intersect;
         
         // Calculate the distance along the slope surface from prediction start to transition point
-        float slope_distance = GetDistanceAlongSlope(prediction_start_position, transition_point_stored, *slope_platform);
+        float slope_distance = GetDistanceAlongSlope(prediction_start_position,
+            transition_point_stored, *slope_platform);
+
+        // Match runtime transition threshold (TOUCH_EPS in CheckAndHandleTransition)
+        constexpr float TRANSITION_TOUCH_EPS = 1.0f;
+        slope_distance = fmaxf(0.0f, slope_distance - TRANSITION_TOUCH_EPS);
+
         
         // Calculate final velocity after traveling down slope, starting with current velocity
         float current_speed = Vector2Length(velocity);
@@ -1349,7 +1339,9 @@ void Box::CalculateMultiReferenceFrameTrajectory(const std::vector<Platform>& pl
         return best;
     };
 
-    Vector2 cur_pos  = has_prediction_start ? prediction_start_position : position;
+    Vector2 cur_pos  = has_prediction_start ? prediction_start_position
+                                        : Vector2{ position.x, position.y + size.y * 0.5f };
+
     const Platform* cur_plat = find_support(cur_pos);
     if (!cur_plat) {
         final_ghost_position = cur_pos;
